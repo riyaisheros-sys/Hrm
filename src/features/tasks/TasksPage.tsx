@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, CheckCheck, Eye, EyeOff, FolderOpen, History, MessageSquarePlus, Pencil, Plus, Send, Settings2, Trash2, Undo2, X } from 'lucide-react'
+import { Check, CheckCheck, ChevronDown, ChevronRight, Eye, EyeOff, FolderOpen, History, MessageSquarePlus, Pencil, Plus, Send, Settings2, Trash2, Undo2, Users as UsersIcon, X } from 'lucide-react'
 import {
   useCreateStatus,
   useCreateTask,
@@ -60,6 +60,10 @@ const DUE_DATE_COLOUR: Record<TaskDelayState, string> = {
 const dueDateClass = (state: TaskDelayState) => DUE_DATE_COLOUR[state]
 
 const PRIORITY_TONE = { low: 'slate', medium: 'blue', high: 'red' } as const
+
+type DisplayItem =
+  | { kind: 'single'; task: TaskRow }
+  | { kind: 'bulk'; key: string; tasks: TaskRow[] }
 
 export function TasksPage() {
   const { user } = useAuth()
@@ -127,6 +131,152 @@ export function TasksPage() {
     return showCompleted ? scoped : scoped.filter((t) => !t.status?.is_terminal)
   }, [scoped, showCompleted, statusFilter])
   const hasFilters = !!(assignorFilter || assigneeFilter || statusFilter)
+
+  // Bulk-assign rows (one task per assignee, shared bulk_key) collapse into a
+  // single parent row in "All tasks" so the list doesn't repeat the same title
+  // N times. "My tasks" stays flat because each person only sees their copy.
+  const [expandedBulks, setExpandedBulks] = useState<Set<string>>(new Set())
+  const displayItems = useMemo<DisplayItem[]>(() => {
+    if (filter !== 'all') return visible.map((task) => ({ kind: 'single' as const, task }))
+    const items: DisplayItem[] = []
+    const seen = new Set<string>()
+    for (const t of visible) {
+      if (t.bulk_key) {
+        if (seen.has(t.bulk_key)) continue
+        const siblings = visible.filter((x) => x.bulk_key === t.bulk_key)
+        if (siblings.length > 1) {
+          items.push({ kind: 'bulk', key: t.bulk_key, tasks: siblings })
+          seen.add(t.bulk_key)
+          continue
+        }
+      }
+      items.push({ kind: 'single', task: t })
+    }
+    return items
+  }, [visible, filter])
+  function toggleBulk(key: string) {
+    setExpandedBulks((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function renderTaskRow(t: TaskRow, isChild: boolean) {
+    return (
+      <tr key={t.id} data-testid="task-row" data-child={isChild ? 'true' : undefined}>
+        <Td className={cn('font-medium text-slate-900', isChild && 'pl-10')}>
+          {t.title}
+          {t.due_date && (
+            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-normal">
+              <span
+                data-testid="task-due-date"
+                data-delay={getTaskDelay(t.due_date, t.completed_at).state}
+                className={dueDateClass(getTaskDelay(t.due_date, t.completed_at).state)}
+              >
+                due {formatDate(t.due_date)}
+              </span>
+              <TaskDelayBadge dueDate={t.due_date} completedAt={t.completed_at} />
+            </div>
+          )}
+          {t.remarks && !isChild && (
+            <div
+              data-testid="task-remark"
+              className="mt-1 flex items-start gap-1 text-xs font-normal text-slate-500"
+            >
+              <MessageSquarePlus className="mt-0.5 size-3 shrink-0 text-slate-400" />
+              <span className="italic">{t.remarks}</span>
+            </div>
+          )}
+        </Td>
+        <Td data-testid="task-assignee">
+          {t.assignee?.full_name || t.assignee?.email || 'Unassigned'}
+        </Td>
+        <Td className="text-slate-500">{t.creator?.full_name || t.creator?.email}</Td>
+        <Td data-testid="task-created-at" className="whitespace-nowrap text-slate-500">
+          {formatDate(t.created_at)}
+        </Td>
+        <Td data-testid="task-completed-at" className="whitespace-nowrap text-slate-500">
+          {formatDate(t.completed_at) || '—'}
+        </Td>
+        <Td>
+          <Badge tone={PRIORITY_TONE[t.priority as keyof typeof PRIORITY_TONE]}>
+            {t.priority}
+          </Badge>
+        </Td>
+        <Td>
+          <div className="flex items-center gap-2" data-testid="task-progress">
+            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+              <div
+                className="bg-brand-500 h-full rounded-full"
+                style={{ width: `${t.progress_percent}%` }}
+              />
+            </div>
+            <span className="text-xs text-slate-500">{t.progress_percent}%</span>
+          </div>
+        </Td>
+        <Td>
+          <Badge
+            className={styleForStatus(t.status?.slug).className}
+            data-testid="task-status"
+            data-status={t.status?.slug ?? ''}
+          >
+            {styleForStatus(t.status?.slug).label}
+          </Badge>
+        </Td>
+        <Td>
+          <div className="flex justify-end gap-1">
+            <LifecycleActions task={t} userId={user!.id} canApproveAny={canManageStatuses} />
+            <button
+              data-testid="update-status-button"
+              aria-label={`Update status of ${t.title}`}
+              className="text-brand-600 hover:bg-brand-50 rounded-md px-2 py-1 text-xs font-medium"
+              onClick={() => setStatusTask(t)}
+            >
+              Update
+            </button>
+            {(t.created_by === user!.id || canManageStatuses) && (
+              <button
+                data-testid="edit-task-button"
+                aria-label={`Edit ${t.title}`}
+                className="hover:text-brand-600 rounded-md p-1 text-slate-400"
+                onClick={() => setEditTask(t)}
+              >
+                <Pencil className="size-4" />
+              </button>
+            )}
+            <button
+              data-testid="task-remark-button"
+              aria-label={`Remarks for ${t.title}`}
+              className="hover:text-brand-600 rounded-md p-1 text-slate-400"
+              onClick={() => setRemarkTask(t)}
+            >
+              <MessageSquarePlus className="size-4" />
+            </button>
+            <button
+              data-testid="task-history-button"
+              aria-label={`History of ${t.title}`}
+              className="rounded-md p-1 text-slate-400 hover:text-slate-700"
+              onClick={() => setHistoryTask(t)}
+            >
+              <History className="size-4" />
+            </button>
+            {canManageStatuses && (
+              <button
+                data-testid="delete-task-button"
+                aria-label={`Delete task ${t.title}`}
+                className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                onClick={() => setConfirmDeleteTask(t)}
+              >
+                <Trash2 className="size-4" />
+              </button>
+            )}
+          </div>
+        </Td>
+      </tr>
+    )
+  }
 
   return (
     <div data-testid="tasks-page">
@@ -303,118 +453,103 @@ export function TasksPage() {
             </tr>
           </Thead>
           <Tbody>
-            {visible.map((t) => (
-              <tr key={t.id} data-testid="task-row">
-                <Td className="font-medium text-slate-900">
-                  {t.title}
-                  {t.due_date && (
-                    <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-normal">
-                      <span
-                        data-testid="task-due-date"
-                        data-delay={getTaskDelay(t.due_date, t.completed_at).state}
-                        className={dueDateClass(getTaskDelay(t.due_date, t.completed_at).state)}
-                      >
-                        due {formatDate(t.due_date)}
-                      </span>
-                      <TaskDelayBadge dueDate={t.due_date} completedAt={t.completed_at} />
-                    </div>
-                  )}
-                  {t.remarks && (
-                    <div
-                      data-testid="task-remark"
-                      className="mt-1 flex items-start gap-1 text-xs font-normal text-slate-500"
-                    >
-                      <MessageSquarePlus className="mt-0.5 size-3 shrink-0 text-slate-400" />
-                      <span className="italic">{t.remarks}</span>
-                    </div>
-                  )}
-                </Td>
-                <Td data-testid="task-assignee">
-                  {t.assignee?.full_name || t.assignee?.email || 'Unassigned'}
-                </Td>
-                <Td className="text-slate-500">{t.creator?.full_name || t.creator?.email}</Td>
-                <Td data-testid="task-created-at" className="whitespace-nowrap text-slate-500">
-                  {formatDate(t.created_at)}
-                </Td>
-                <Td data-testid="task-completed-at" className="whitespace-nowrap text-slate-500">
-                  {formatDate(t.completed_at) || '—'}
-                </Td>
-                <Td>
-                  <Badge tone={PRIORITY_TONE[t.priority as keyof typeof PRIORITY_TONE]}>
-                    {t.priority}
-                  </Badge>
-                </Td>
-                <Td>
-                  <div className="flex items-center gap-2" data-testid="task-progress">
-                    <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="bg-brand-500 h-full rounded-full"
-                        style={{ width: `${t.progress_percent}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-slate-500">{t.progress_percent}%</span>
-                  </div>
-                </Td>
-                <Td>
-                  <Badge
-                    className={styleForStatus(t.status?.slug).className}
-                    data-testid="task-status"
-                    data-status={t.status?.slug ?? ''}
-                  >
-                    {styleForStatus(t.status?.slug).label}
-                  </Badge>
-                </Td>
-                <Td>
-                  <div className="flex justify-end gap-1">
-                    <LifecycleActions task={t} userId={user!.id} canApproveAny={canManageStatuses} />
+            {displayItems.flatMap((item) => {
+              if (item.kind === 'single') {
+                return [renderTaskRow(item.task, false)]
+              }
+              const expanded = expandedBulks.has(item.key)
+              const first = item.tasks[0]
+              const total = item.tasks.length
+              const done = item.tasks.filter((t) => t.status?.is_terminal).length
+              const names = item.tasks
+                .map((t) => t.assignee?.full_name || t.assignee?.email || '—')
+                .filter((n): n is string => Boolean(n))
+              const preview = names.slice(0, 5).join(', ')
+              const moreCount = Math.max(0, names.length - 5)
+              return [
+                <tr
+                  key={`bulk-${item.key}`}
+                  data-testid="task-bulk-row"
+                  data-bulk-key={item.key}
+                  className="bg-slate-50"
+                >
+                  <Td className="font-medium text-slate-900" colSpan={2}>
                     <button
-                      data-testid="update-status-button"
-                      aria-label={`Update status of ${t.title}`}
-                      className="text-brand-600 hover:bg-brand-50 rounded-md px-2 py-1 text-xs font-medium"
-                      onClick={() => setStatusTask(t)}
+                      type="button"
+                      data-testid="toggle-bulk"
+                      onClick={() => toggleBulk(item.key)}
+                      className="hover:text-brand-600 flex items-center gap-2 text-left"
                     >
-                      Update
+                      {expanded ? (
+                        <ChevronDown className="size-4 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="size-4 text-slate-400" />
+                      )}
+                      <span>{first.title}</span>
+                      <Badge tone="blue" className="gap-1">
+                        <UsersIcon className="size-3" /> {total} people
+                      </Badge>
                     </button>
-                    {(t.created_by === user!.id || canManageStatuses) && (
-                      <button
-                        data-testid="edit-task-button"
-                        aria-label={`Edit ${t.title}`}
-                        className="hover:text-brand-600 rounded-md p-1 text-slate-400"
-                        onClick={() => setEditTask(t)}
-                      >
-                        <Pencil className="size-4" />
-                      </button>
+                    {first.due_date && (
+                      <div className="mt-0.5 ml-6 flex flex-wrap items-center gap-1.5 text-xs font-normal">
+                        <span
+                          data-delay={getTaskDelay(first.due_date, first.completed_at).state}
+                          className={dueDateClass(getTaskDelay(first.due_date, first.completed_at).state)}
+                        >
+                          due {formatDate(first.due_date)}
+                        </span>
+                      </div>
                     )}
-                    <button
-                      data-testid="task-remark-button"
-                      aria-label={`Remarks for ${t.title}`}
-                      className="hover:text-brand-600 rounded-md p-1 text-slate-400"
-                      onClick={() => setRemarkTask(t)}
-                    >
-                      <MessageSquarePlus className="size-4" />
-                    </button>
-                    <button
-                      data-testid="task-history-button"
-                      aria-label={`History of ${t.title}`}
-                      className="rounded-md p-1 text-slate-400 hover:text-slate-700"
-                      onClick={() => setHistoryTask(t)}
-                    >
-                      <History className="size-4" />
-                    </button>
-                    {canManageStatuses && (
-                      <button
-                        data-testid="delete-task-button"
-                        aria-label={`Delete task ${t.title}`}
-                        className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                        onClick={() => setConfirmDeleteTask(t)}
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
+                    <div className="mt-1 ml-6 text-xs font-normal text-slate-500">
+                      {preview}
+                      {moreCount > 0 && ` +${moreCount} more`}
+                    </div>
+                    {first.remarks && (
+                      <div className="mt-1 ml-6 flex items-start gap-1 text-xs font-normal text-slate-500">
+                        <MessageSquarePlus className="mt-0.5 size-3 shrink-0 text-slate-400" />
+                        <span className="italic">{first.remarks}</span>
+                      </div>
                     )}
-                  </div>
-                </Td>
-              </tr>
-            ))}
+                  </Td>
+                  <Td className="text-slate-500">
+                    {first.creator?.full_name || first.creator?.email}
+                  </Td>
+                  <Td className="whitespace-nowrap text-slate-500">
+                    {formatDate(first.created_at)}
+                  </Td>
+                  <Td className="whitespace-nowrap text-slate-500">—</Td>
+                  <Td>
+                    <Badge tone={PRIORITY_TONE[first.priority as keyof typeof PRIORITY_TONE]}>
+                      {first.priority}
+                    </Badge>
+                  </Td>
+                  <Td className="whitespace-nowrap text-xs text-slate-500">
+                    {done}/{total} completed
+                  </Td>
+                  <Td>
+                    <span className="text-xs text-slate-500">
+                      {expanded ? 'Expanded' : 'Click to expand'}
+                    </span>
+                  </Td>
+                  <Td>
+                    <div className="flex justify-end gap-1">
+                      {(first.created_by === user!.id || canManageStatuses) && (
+                        <button
+                          data-testid="edit-bulk-task-button"
+                          aria-label={`Edit ${first.title} (bulk)`}
+                          className="hover:text-brand-600 rounded-md p-1 text-slate-400"
+                          onClick={() => setEditTask(first)}
+                          title="Edit the shared task template (does not change individual assignee state)"
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                      )}
+                    </div>
+                  </Td>
+                </tr>,
+                ...(expanded ? item.tasks.map((t) => renderTaskRow(t, true)) : []),
+              ]
+            })}
           </Tbody>
         </Table>
       )}
@@ -521,7 +656,10 @@ function NewTaskModal({
           }
           // One task per assignee — keeps capacity, approvals and ownership
           // per-user. For a single assignee this is identical to the old flow.
+          // A shared bulk_key ties the rows together so the UI can collapse
+          // them into one expandable row in All Tasks.
           const targets = canAssign ? [...assigneeIds] : [userId]
+          const bulkKey = targets.length > 1 ? crypto.randomUUID() : null
           try {
             await Promise.all(
               targets.map((assigneeId) =>
@@ -534,6 +672,7 @@ function NewTaskModal({
                   createdBy: userId,
                   remarks,
                   categoryId: categoryId || null,
+                  bulkKey,
                 }),
               ),
             )

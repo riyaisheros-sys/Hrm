@@ -85,6 +85,7 @@ export interface NewTask {
   createdBy: string
   remarks?: string
   categoryId?: string | null
+  bulkKey?: string | null
 }
 
 export function useCreateTask() {
@@ -92,20 +93,24 @@ export function useCreateTask() {
   return useMutation({
     mutationFn: async (t: NewTask) => {
       const assigned = t.assigneeId != null && t.assigneeId !== t.createdBy
+      const insert: Record<string, unknown> = {
+        title: t.title,
+        description: t.description || null,
+        assignee_id: t.assigneeId,
+        status_id: t.statusId,
+        priority: t.priority,
+        due_date: t.dueDate,
+        created_by: t.createdBy,
+        task_type: assigned ? 'assigned' : 'self',
+        remarks: t.remarks?.trim() || null,
+        category_id: t.categoryId || null,
+      }
+      // Only send bulk_key if we actually have one — keeps inserts working on
+      // databases where the column has not yet been added (graceful rollout).
+      if (t.bulkKey) insert.bulk_key = t.bulkKey
       const { data, error } = await supabase
         .from('tasks')
-        .insert({
-          title: t.title,
-          description: t.description || null,
-          assignee_id: t.assigneeId,
-          status_id: t.statusId,
-          priority: t.priority,
-          due_date: t.dueDate,
-          created_by: t.createdBy,
-          task_type: assigned ? 'assigned' : 'self',
-          remarks: t.remarks?.trim() || null,
-          category_id: t.categoryId || null,
-        })
+        .insert(insert as never)
         .select(TASK_SELECT)
         .single()
       if (error) throw error

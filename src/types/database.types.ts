@@ -2910,6 +2910,7 @@ export type Database = {
           approved_by: string | null
           rejection_reason: string | null
           rework_reason: string | null
+          bulk_key: string | null
         }
         Insert: {
           assignee_id?: string | null
@@ -2934,6 +2935,7 @@ export type Database = {
           approved_by?: string | null
           rejection_reason?: string | null
           rework_reason?: string | null
+          bulk_key?: string | null
         }
         Update: {
           assignee_id?: string | null
@@ -2958,6 +2960,7 @@ export type Database = {
           approved_by?: string | null
           rejection_reason?: string | null
           rework_reason?: string | null
+          bulk_key?: string | null
         }
         Relationships: [
           {
