@@ -368,6 +368,9 @@ export function AdminDashboard() {
         )}
       </SectionCard>
     ),
+    'employee-snapshot': (
+      <EmployeeSnapshotCard users={users} attendance={attendance} tasks={tasks} today={today} />
+    ),
     announcements: (
       <SectionCard
         title="Latest announcements"
@@ -447,4 +450,136 @@ export function AdminDashboard() {
       )}
     </div>
   )
+}
+
+/**
+ * "Admin me employee ka dashboard bhi show ho" (meeting ask) — a single
+ * section where admins pick any employee and see their core day: attendance,
+ * tasks pipeline and leave balance. Keeps the full Employee view a click away
+ * via the top-bar toggle.
+ */
+function EmployeeSnapshotCard({
+  users,
+  attendance,
+  tasks,
+  today,
+}: {
+  users: Array<{ id: string; full_name: string; email: string }>
+  attendance: Array<{ user_id: string; status: string | null; is_late: boolean | null; first_in_at: string | null; last_out_at: string | null; worked_minutes: number | null }>
+  tasks: Array<{ assignee_id: string | null; status: { slug: string; is_terminal: boolean } | null; due_date: string | null; progress_percent: number }>
+  today: string
+}) {
+  const sortedUsers = [...users].sort((a, b) =>
+    (a.full_name || a.email).localeCompare(b.full_name || b.email),
+  )
+  const [selected, setSelected] = useState(sortedUsers[0]?.id ?? '')
+  const effective = selected || sortedUsers[0]?.id || ''
+  const myAtt = attendance.find((a) => a.user_id === effective) ?? null
+  const myTasks = tasks.filter((t) => t.assignee_id === effective)
+  const openCount = myTasks.filter((t) => !t.status?.is_terminal).length
+  const overdueCount = myTasks.filter(
+    (t) =>
+      !t.status?.is_terminal &&
+      t.due_date != null &&
+      t.due_date < today &&
+      (t.progress_percent ?? 0) < 100,
+  ).length
+  const awaitingCount = myTasks.filter((t) => t.status?.slug === 'awaiting_approval').length
+  const { data: balances = [] } = useEmployeeLeaveBalance(effective)
+  const totalRemaining = balances.reduce((sum, b) => sum + Math.max(0, b.remaining), 0)
+  const attStatus = myAtt?.status ?? 'not_punched'
+  const attLabel =
+    attStatus === 'full_day' ? 'Full day'
+    : attStatus === 'half_day' ? 'Half day'
+    : attStatus === 'quarter_day' ? 'Quarter day'
+    : attStatus === 'present' ? 'Present'
+    : attStatus === 'absent' ? 'Absent'
+    : '—'
+
+  return (
+    <Card>
+      <CardBody data-testid="employee-snapshot-card">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-semibold text-slate-900">Employee's dashboard</h2>
+          <select
+            data-testid="employee-snapshot-picker"
+            value={effective}
+            onChange={(e) => setSelected(e.target.value)}
+            className="max-w-56 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+          >
+            {sortedUsers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name || u.email}
+              </option>
+            ))}
+          </select>
+        </div>
+        {!effective ? (
+          <p className="text-sm text-slate-400">No employees to display.</p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <SnapshotTile label="Today" value={attLabel} tone={myAtt?.is_late ? 'amber' : 'brand'} />
+            <SnapshotTile label="Open tasks" value={openCount} />
+            <SnapshotTile label="Overdue" value={overdueCount} tone={overdueCount ? 'red' : 'brand'} />
+            <SnapshotTile label="Awaiting approval" value={awaitingCount} tone="amber" />
+            <SnapshotTile label="Leave remaining" value={totalRemaining} tone="green" />
+            <SnapshotTile
+              label="First in"
+              value={myAtt?.first_in_at ? new Date(myAtt.first_in_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+            />
+            <SnapshotTile
+              label="Last out"
+              value={myAtt?.last_out_at ? new Date(myAtt.last_out_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}
+            />
+            <SnapshotTile
+              label="Worked"
+              value={myAtt?.worked_minutes != null ? `${Math.floor(myAtt.worked_minutes / 60)}h ${myAtt.worked_minutes % 60}m` : '—'}
+            />
+          </div>
+        )}
+      </CardBody>
+    </Card>
+  )
+}
+
+function SnapshotTile({
+  label,
+  value,
+  tone = 'brand',
+}: {
+  label: string
+  value: number | string
+  tone?: 'brand' | 'green' | 'amber' | 'red'
+}) {
+  const toneCls: Record<string, string> = {
+    brand: 'text-slate-900',
+    green: 'text-emerald-600',
+    amber: 'text-amber-600',
+    red: 'text-red-600',
+  }
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+      <p className={`text-lg font-semibold ${toneCls[tone]}`}>{value}</p>
+      <p className="text-xs text-slate-500">{label}</p>
+    </div>
+  )
+}
+
+function useEmployeeLeaveBalance(userId: string | null) {
+  const year = new Date().getFullYear()
+  return useQuery({
+    queryKey: ['employee-leave-balance', userId, year],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('leave_balances')
+        .select('allocated, used')
+        .eq('user_id', userId!)
+        .eq('year', year)
+      if (error) throw error
+      return (data ?? []).map((row) => ({
+        remaining: Number(row.allocated ?? 0) - Number(row.used ?? 0),
+      }))
+    },
+  })
 }

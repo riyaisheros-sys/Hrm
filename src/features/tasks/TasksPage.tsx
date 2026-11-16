@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, CheckCheck, Eye, EyeOff, FolderOpen, History, MessageSquarePlus, Plus, Send, Settings2, Trash2, Undo2, X } from 'lucide-react'
+import { Check, CheckCheck, Eye, EyeOff, FolderOpen, History, MessageSquarePlus, Pencil, Plus, Send, Settings2, Trash2, Undo2, X } from 'lucide-react'
 import {
   useCreateStatus,
   useCreateTask,
@@ -12,6 +12,7 @@ import {
   useTasksRealtime,
   useAddTaskRemark,
   useTaskRemarks,
+  useUpdateTask,
   useUpdateTaskStatus,
   useUpdateTaskDueDate,
   useUpdateTaskProgress,
@@ -76,6 +77,7 @@ export function TasksPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [newOpen, setNewOpen] = useState(false)
   const [statusTask, setStatusTask] = useState<TaskRow | null>(null)
+  const [editTask, setEditTask] = useState<TaskRow | null>(null)
   const [historyTask, setHistoryTask] = useState<TaskRow | null>(null)
   const [remarkTask, setRemarkTask] = useState<TaskRow | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
@@ -373,6 +375,16 @@ export function TasksPage() {
                     >
                       Update
                     </button>
+                    {(t.created_by === user!.id || canManageStatuses) && (
+                      <button
+                        data-testid="edit-task-button"
+                        aria-label={`Edit ${t.title}`}
+                        className="hover:text-brand-600 rounded-md p-1 text-slate-400"
+                        onClick={() => setEditTask(t)}
+                      >
+                        <Pencil className="size-4" />
+                      </button>
+                    )}
                     <button
                       data-testid="task-remark-button"
                       aria-label={`Remarks for ${t.title}`}
@@ -411,6 +423,9 @@ export function TasksPage() {
         <NewTaskModal onClose={() => setNewOpen(false)} canAssign={canAssign} userId={user!.id} />
       )}
       {statusTask && <StatusModal task={statusTask} onClose={() => setStatusTask(null)} />}
+      {editTask && (
+        <EditTaskModal task={editTask} onClose={() => setEditTask(null)} canAssign={canAssign} />
+      )}
       {remarkTask && <RemarkModal task={remarkTask} onClose={() => setRemarkTask(null)} />}
       {historyTask && <HistoryModal task={historyTask} onClose={() => setHistoryTask(null)} />}
       {manageOpen && <StatusMasterModal onClose={() => setManageOpen(false)} />}
@@ -459,21 +474,40 @@ function NewTaskModal({
   const { data: categories = [] } = useTaskCategories()
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
-  // Managers must pick someone else — the self-assign shortcut is gone to
-  // enforce the client rule: 'khud ko assign nh hoga'.
-  const [assigneeId, setAssigneeId] = useState(canAssign ? '' : userId)
+  // Multi-assign: managers can pick one or more employees, and may include
+  // themselves ("Self assignment also" — meeting Nov 2026). Non-managers only
+  // ever create self-tasks, so the picker is hidden for them.
+  const [assigneeIds, setAssigneeIds] = useState<Set<string>>(
+    canAssign ? new Set() : new Set([userId]),
+  )
   const [dueDate, setDueDate] = useState('')
   const [remarks, setRemarks] = useState('')
   const [categoryId, setCategoryId] = useState('')
-  const { data: assigneeOpen = 0 } = useOpenTaskCount(assigneeId || null)
-  const { data: assigneeCap = 25 } = useEffectiveCapacity(assigneeId || null)
-  const overCap = !!assigneeId && assigneeId !== userId && assigneeOpen >= assigneeCap
+
+  const sortedUsers = useMemo(
+    () => users.slice().sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email)),
+    [users],
+  )
+  const singleAssignee = assigneeIds.size === 1 ? [...assigneeIds][0] : null
+  const { data: assigneeOpen = 0 } = useOpenTaskCount(singleAssignee)
+  const { data: assigneeCap = 25 } = useEffectiveCapacity(singleAssignee)
+  const overCap =
+    !!singleAssignee && singleAssignee !== userId && assigneeOpen >= assigneeCap
+
+  function toggleAssignee(id: string) {
+    setAssigneeIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   return (
     <Modal open onClose={onClose} title="New task" testid="task-modal">
       <form
         className="space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault()
           const firstStatus = statuses[0]?.id
           if (!firstStatus) return
@@ -481,29 +515,35 @@ function NewTaskModal({
             toast.error('Pick a task group', 'Choose which group this task belongs to.')
             return
           }
-          if (canAssign && !assigneeId) {
-            toast.error('Pick an assignee', 'Choose the employee this task is for.')
+          if (canAssign && assigneeIds.size === 0) {
+            toast.error('Pick at least one assignee', 'Choose who this task is for.')
             return
           }
-          create.mutate(
-            {
-              title: title.trim(),
-              assigneeId: canAssign ? assigneeId || null : userId,
-              statusId: firstStatus,
-              priority,
-              dueDate: dueDate || null,
-              createdBy: userId,
-              remarks,
-              categoryId: categoryId || null,
-            },
-            {
-              onSuccess: () => {
-                toast.success('Task created')
-                onClose()
-              },
-              onError: (err) => toast.error('Could not create task', (err as Error).message),
-            },
-          )
+          // One task per assignee — keeps capacity, approvals and ownership
+          // per-user. For a single assignee this is identical to the old flow.
+          const targets = canAssign ? [...assigneeIds] : [userId]
+          try {
+            await Promise.all(
+              targets.map((assigneeId) =>
+                create.mutateAsync({
+                  title: title.trim(),
+                  assigneeId,
+                  statusId: firstStatus,
+                  priority,
+                  dueDate: dueDate || null,
+                  createdBy: userId,
+                  remarks,
+                  categoryId: categoryId || null,
+                }),
+              ),
+            )
+            toast.success(
+              targets.length === 1 ? 'Task created' : `Tasks created for ${targets.length} people`,
+            )
+            onClose()
+          } catch (err) {
+            toast.error('Could not create task', (err as Error).message)
+          }
         }}
       >
         <div>
@@ -580,32 +620,71 @@ function NewTaskModal({
           </div>
         </div>
         <div>
-          <Label htmlFor="task-assignee">Assignee</Label>
-          <Select
-            id="task-assignee"
-            data-testid="task-assignee-select"
-            value={assigneeId}
-            onChange={(e) => setAssigneeId(e.target.value)}
-            disabled={!canAssign}
-          >
-            {!canAssign && <option value={userId}>Myself</option>}
-            {canAssign && <option value="">Select employee…</option>}
-            {canAssign &&
-              users
-                .filter((u) => u.id !== userId)
-                .sort((a, b) =>
-                  (a.full_name || a.email).localeCompare(b.full_name || b.email),
+          <div className="mb-1 flex items-center justify-between">
+            <Label className="mb-0">Assignees</Label>
+            {canAssign && (
+              <div className="flex gap-2 text-xs">
+                <button
+                  type="button"
+                  className="text-brand-600 hover:underline"
+                  onClick={() => setAssigneeIds(new Set(sortedUsers.map((u) => u.id)))}
+                  data-testid="assignees-select-all"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  className="text-slate-500 hover:underline"
+                  onClick={() => setAssigneeIds(new Set())}
+                  data-testid="assignees-clear"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+          {!canAssign ? (
+            <p className="text-sm text-slate-600">
+              This task will be assigned to you. Only managers can assign to others.
+            </p>
+          ) : (
+            <div
+              className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-2"
+              data-testid="task-assignee-list"
+            >
+              {sortedUsers.map((u) => {
+                const isSelf = u.id === userId
+                const checked = assigneeIds.has(u.id)
+                return (
+                  <label
+                    key={u.id}
+                    className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 hover:bg-slate-50"
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-brand-600"
+                      checked={checked}
+                      onChange={() => toggleAssignee(u.id)}
+                      data-testid={`task-assignee-opt-${u.email}`}
+                    />
+                    <span className="text-sm text-slate-700">
+                      {u.full_name || u.email}
+                      {isSelf && <span className="ml-1 text-xs text-slate-400">(myself)</span>}
+                    </span>
+                  </label>
                 )
-                .map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.full_name || u.email}
-                  </option>
-                ))}
-          </Select>
-          {!canAssign && (
-            <p className="mt-1 text-xs text-slate-400">Only managers can assign to others.</p>
+              })}
+              {sortedUsers.length === 0 && (
+                <p className="px-1 py-2 text-xs text-slate-400">No employees found.</p>
+              )}
+            </div>
           )}
-          {assigneeId && assigneeId !== userId && (
+          {canAssign && assigneeIds.size > 1 && (
+            <p className="mt-1 text-xs text-slate-500" data-testid="bulk-assign-hint">
+              {assigneeIds.size} employees selected — one task will be created for each.
+            </p>
+          )}
+          {singleAssignee && singleAssignee !== userId && (
             <p
               data-testid="assignee-capacity-hint"
               className={cn(
@@ -635,6 +714,161 @@ function NewTaskModal({
           </Button>
           <Button type="submit" data-testid="create-task-submit" loading={create.isPending}>
             Create task
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function EditTaskModal({
+  task,
+  onClose,
+  canAssign,
+}: {
+  task: TaskRow
+  onClose: () => void
+  canAssign: boolean
+}) {
+  const update = useUpdateTask()
+  const toast = useToast()
+  const { data: users = [] } = useUsers()
+  const { data: categories = [] } = useTaskCategories()
+  const [title, setTitle] = useState(task.title)
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(
+    (task.priority as 'low' | 'medium' | 'high') ?? 'medium',
+  )
+  const [assigneeId, setAssigneeId] = useState(task.assignee_id ?? task.created_by)
+  const [dueDate, setDueDate] = useState(task.due_date ?? '')
+  const [categoryId, setCategoryId] = useState(task.category_id ?? '')
+  const [remarks, setRemarks] = useState(task.remarks ?? '')
+
+  return (
+    <Modal open onClose={onClose} title={`Edit: ${task.title}`} testid="edit-task-modal">
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (!title.trim()) {
+            toast.error('Title required')
+            return
+          }
+          update.mutate(
+            {
+              taskId: task.id,
+              createdBy: task.created_by,
+              patch: {
+                title,
+                priority,
+                dueDate: dueDate || null,
+                assigneeId: assigneeId || task.created_by,
+                categoryId: categoryId || null,
+                remarks,
+              },
+            },
+            {
+              onSuccess: () => {
+                toast.success('Task updated')
+                onClose()
+              },
+              onError: (err) => toast.error('Update failed', (err as Error).message),
+            },
+          )
+        }}
+      >
+        <div>
+          <Label htmlFor="edit-task-title">Task</Label>
+          <Input
+            id="edit-task-title"
+            data-testid="edit-task-title-input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="edit-task-priority">Priority</Label>
+            <Select
+              id="edit-task-priority"
+              data-testid="edit-task-priority-select"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value as 'low' | 'medium' | 'high')}
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="edit-task-due">Due date</Label>
+            <Input
+              id="edit-task-due"
+              data-testid="edit-task-due-input"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-task-category">Task Group</Label>
+            <Select
+              id="edit-task-category"
+              data-testid="edit-task-category-select"
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <option value="">— None —</option>
+              {categories
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </Select>
+          </div>
+          {canAssign && (
+            <div>
+              <Label htmlFor="edit-task-assignee">Assignee</Label>
+              <Select
+                id="edit-task-assignee"
+                data-testid="edit-task-assignee-select"
+                value={assigneeId}
+                onChange={(e) => setAssigneeId(e.target.value)}
+              >
+                {users
+                  .slice()
+                  .sort((a, b) =>
+                    (a.full_name || a.email).localeCompare(b.full_name || b.email),
+                  )
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name || u.email}
+                      {u.id === task.created_by ? ' (creator)' : ''}
+                    </option>
+                  ))}
+              </Select>
+            </div>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="edit-task-remarks">Remarks</Label>
+          <Textarea
+            id="edit-task-remarks"
+            data-testid="edit-task-remarks-input"
+            rows={2}
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" data-testid="save-task-edit" loading={update.isPending}>
+            Save changes
           </Button>
         </div>
       </form>

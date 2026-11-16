@@ -56,7 +56,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json()
 
     if (body.action === 'create') {
-      const { email, password, fullName, employeeCode, departmentId, teamId, managerId, roleIds } = body
+      const { email, password, fullName, employeeCode, departmentId, teamId, managerId, roleIds, kra, kpi } = body
       if (!email || !password) return json({ error: 'email and password are required' }, 400)
 
       const { data: created, error: cErr } = await admin.auth.admin.createUser({
@@ -76,6 +76,8 @@ Deno.serve(async (req: Request) => {
         team_id: teamId || null,
         reporting_manager_id: managerId || null,
         status: 'active',
+        kra: kra || null,
+        kpi: kpi || null,
       })
       if (pErr) {
         // Roll back the auth user so we don't leave an orphan.

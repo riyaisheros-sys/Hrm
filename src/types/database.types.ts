@@ -2174,6 +2174,8 @@ export type Database = {
           team_id: string | null
           updated_at: string
           task_capacity: number | null
+          kra: string | null
+          kpi: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -2189,6 +2191,8 @@ export type Database = {
           team_id?: string | null
           updated_at?: string
           task_capacity?: number | null
+          kra?: string | null
+          kpi?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -2204,6 +2208,8 @@ export type Database = {
           team_id?: string | null
           updated_at?: string
           task_capacity?: number | null
+          kra?: string | null
+          kpi?: string | null
         }
         Relationships: [
           {

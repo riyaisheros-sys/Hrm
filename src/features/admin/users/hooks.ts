@@ -32,6 +32,8 @@ export interface ProfileUpdate {
   status?: 'active' | 'inactive'
   avatar_url?: string | null
   task_capacity?: number | null
+  kra?: string | null
+  kpi?: string | null
 }
 
 export async function uploadProfilePicture(userId: string, file: File) {
@@ -74,6 +76,8 @@ export interface NewEmployee {
   managerId?: string | null
   roleIds: string[]
   leaveQuotas?: LeaveQuotaInput[]
+  kra?: string | null
+  kpi?: string | null
 }
 
 export function useCreateEmployee() {

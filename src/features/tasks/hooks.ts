@@ -187,6 +187,50 @@ export function useUpdateTaskProgress() {
   })
 }
 
+/**
+ * Edit an existing task's editable fields (title, priority, due date,
+ * assignee, category, remarks). RLS allows the creator, assignee or task
+ * manager. `assigneeId` null detaches the task back to the creator's self.
+ */
+export interface TaskEdit {
+  title?: string
+  priority?: 'low' | 'medium' | 'high'
+  dueDate?: string | null
+  assigneeId?: string | null
+  categoryId?: string | null
+  remarks?: string | null
+}
+
+export function useUpdateTask() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: { taskId: string; patch: TaskEdit; createdBy?: string }) => {
+      const patch: Record<string, unknown> = {}
+      const p = args.patch
+      if (p.title !== undefined) patch.title = p.title.trim()
+      if (p.priority !== undefined) patch.priority = p.priority
+      if (p.dueDate !== undefined) patch.due_date = p.dueDate
+      if (p.categoryId !== undefined) patch.category_id = p.categoryId
+      if (p.remarks !== undefined) patch.remarks = p.remarks?.trim() || null
+      if (p.assigneeId !== undefined) {
+        patch.assignee_id = p.assigneeId
+        // Keep task_type consistent: self when owner==assignee, assigned otherwise.
+        if (args.createdBy) {
+          patch.task_type = p.assigneeId && p.assigneeId !== args.createdBy ? 'assigned' : 'self'
+        }
+      }
+      const { data, error } = await supabase
+        .from('tasks')
+        .update(patch as never)
+        .eq('id', args.taskId)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this task')
+    },
+    onSuccess: () => invalidateTasks(qc),
+  })
+}
+
 /** Change a task's due date. RLS allows the creator, assignee or task manager. */
 export function useUpdateTaskDueDate() {
   const qc = useQueryClient()

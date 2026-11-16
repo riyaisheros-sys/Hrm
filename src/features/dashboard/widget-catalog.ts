@@ -56,6 +56,9 @@ export const ADMIN_WIDGET_CATALOG: WidgetDef[] = [
 
   // Communication
   { id: 'announcements',      label: 'Latest announcements',        group: 'Communication', size: 2 },
+
+  // See any employee's day (admin "view as employee")
+  { id: 'employee-snapshot',  label: "Employee's dashboard",        group: 'People', size: 2 },
 ]
 
 export const EMPLOYEE_WIDGET_CATALOG: WidgetDef[] = [
