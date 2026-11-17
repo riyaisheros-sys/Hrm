@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, CheckCheck, ChevronDown, ChevronRight, Eye, EyeOff, FolderOpen, History, MessageSquarePlus, Pencil, Plus, Send, Settings2, Trash2, Undo2, Users as UsersIcon, X } from 'lucide-react'
 import {
   useCreateStatus,
@@ -163,10 +163,28 @@ export function TasksPage() {
     })
   }
 
+  // Page-wise pagination — clients asked for this when the list grew long.
+  // A single UI row for a bulk group counts as one display item (not N).
+  const PAGE_SIZE = 25
+  const [page, setPage] = useState(0)
+  const totalPages = Math.max(1, Math.ceil(displayItems.length / PAGE_SIZE))
+  // Reset to first page whenever filters / search surface a different result set.
+  useEffect(() => {
+    setPage(0)
+  }, [filter, assignorFilter, assigneeFilter, statusFilter, showCompleted])
+  const pageStart = page * PAGE_SIZE
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, displayItems.length)
+  const pagedItems = displayItems.slice(pageStart, pageEnd)
+
   function renderTaskRow(t: TaskRow, isChild: boolean) {
     return (
       <tr key={t.id} data-testid="task-row" data-child={isChild ? 'true' : undefined}>
-        <Td className={cn('font-medium text-slate-900', isChild && 'pl-10')}>
+        <Td
+          className={cn(
+            'sticky left-0 z-10 bg-white font-medium text-slate-900',
+            isChild && 'bg-slate-50 pl-10',
+          )}
+        >
           {t.title}
           {t.due_date && (
             <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-normal">
@@ -225,7 +243,12 @@ export function TasksPage() {
             {styleForStatus(t.status?.slug).label}
           </Badge>
         </Td>
-        <Td>
+        <Td
+          className={cn(
+            'sticky right-0 z-10 bg-white shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]',
+            isChild && 'bg-slate-50',
+          )}
+        >
           <div className="flex justify-end gap-1">
             <LifecycleActions task={t} userId={user!.id} canApproveAny={canManageStatuses} />
             <button
@@ -441,7 +464,7 @@ export function TasksPage() {
         <Table data-testid="tasks-table">
           <Thead>
             <tr>
-              <Th>Task</Th>
+              <Th className="sticky left-0 z-20 bg-slate-50">Task</Th>
               <Th>Assignee</Th>
               <Th>Created by</Th>
               <Th>Created</Th>
@@ -449,11 +472,11 @@ export function TasksPage() {
               <Th>Priority</Th>
               <Th>Progress</Th>
               <Th>Status</Th>
-              <Th className="w-px" />
+              <Th className="sticky right-0 z-20 w-px bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" />
             </tr>
           </Thead>
           <Tbody>
-            {displayItems.flatMap((item) => {
+            {pagedItems.flatMap((item) => {
               if (item.kind === 'single') {
                 return [renderTaskRow(item.task, false)]
               }
@@ -473,7 +496,10 @@ export function TasksPage() {
                   data-bulk-key={item.key}
                   className="bg-slate-50"
                 >
-                  <Td className="font-medium text-slate-900" colSpan={2}>
+                  <Td
+                    className="sticky left-0 z-10 bg-slate-50 font-medium text-slate-900"
+                    colSpan={2}
+                  >
                     <button
                       type="button"
                       data-testid="toggle-bulk"
@@ -531,7 +557,7 @@ export function TasksPage() {
                       {expanded ? 'Expanded' : 'Click to expand'}
                     </span>
                   </Td>
-                  <Td>
+                  <Td className="sticky right-0 z-10 bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]">
                     <div className="flex justify-end gap-1">
                       {(first.created_by === user!.id || canManageStatuses) && (
                         <button
@@ -552,6 +578,43 @@ export function TasksPage() {
             })}
           </Tbody>
         </Table>
+      )}
+
+      {displayItems.length > PAGE_SIZE && (
+        <div
+          data-testid="tasks-pagination"
+          className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500"
+        >
+          <span>
+            Showing <strong className="text-slate-700">{pageStart + 1}</strong>–
+            <strong className="text-slate-700">{pageEnd}</strong> of{' '}
+            <strong className="text-slate-700">{displayItems.length}</strong>
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              data-testid="tasks-page-prev"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 enabled:hover:bg-slate-50 disabled:opacity-40"
+            >
+              ← Prev
+            </button>
+            <span className="px-2">
+              Page <strong className="text-slate-700">{page + 1}</strong> of{' '}
+              <strong className="text-slate-700">{totalPages}</strong>
+            </span>
+            <button
+              type="button"
+              data-testid="tasks-page-next"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 enabled:hover:bg-slate-50 disabled:opacity-40"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
       )}
 
       {newOpen && (
