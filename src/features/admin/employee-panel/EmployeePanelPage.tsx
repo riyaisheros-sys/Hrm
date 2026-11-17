@@ -37,13 +37,13 @@ export function EmployeePanelPage() {
     <div data-testid="employee-panel-page">
       <PageHeader
         title="Employee panel"
-        description="Toggle what every employee sees in their side panel and dashboard. Hidden items disappear for all employees immediately."
+        description="Toggle what every employee sees in their entries (side panel) and in their dashboard / reports. Hidden items disappear for all employees immediately."
       />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
           <CardBody>
-            <h2 className="mb-2 text-sm font-semibold text-slate-900">Employee sidebar</h2>
+            <h2 className="mb-2 text-sm font-semibold text-slate-900">Employee entries</h2>
             <p className="mb-3 text-xs text-slate-500">
               Each item visible in the employee view can be toggled off. Employees whose role lacks
               the permission for a page still won't see it regardless.
@@ -87,7 +87,7 @@ export function EmployeePanelPage() {
 
         <Card>
           <CardBody>
-            <h2 className="mb-2 text-sm font-semibold text-slate-900">Employee dashboard</h2>
+            <h2 className="mb-2 text-sm font-semibold text-slate-900">Employee dashboard / reports</h2>
             <p className="mb-3 text-xs text-slate-500">
               Each dashboard widget available in the employee view. Hidden widgets disappear from
               everyone's dashboard.
