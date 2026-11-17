@@ -841,6 +841,48 @@ export type Database = {
           },
         ]
       }
+      employee_sidebar_policy: {
+        Row: {
+          item_key: string
+          is_visible: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          item_key: string
+          is_visible?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          item_key?: string
+          is_visible?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      employee_dashboard_policy: {
+        Row: {
+          widget_id: string
+          is_visible: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          widget_id: string
+          is_visible?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          widget_id?: string
+          is_visible?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       departments: {
         Row: {
           company_id: string

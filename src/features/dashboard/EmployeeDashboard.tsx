@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/Button'
 import { useToast } from '@/components/ui/toast-context'
 import { DashboardCustomizer } from './DashboardCustomizer'
 import { useDashboardPreferences } from './dashboard-preferences'
+import { useEmployeeDashboardPolicy } from '@/features/admin/employee-panel/hooks'
 
 import { EMPLOYEE_WIDGET_CATALOG, WIDE_WIDGET_IDS } from './widget-catalog'
 const EMPLOYEE_WIDGETS = EMPLOYEE_WIDGET_CATALOG
@@ -123,6 +124,7 @@ export function EmployeeDashboard() {
     'employee',
     EMPLOYEE_WIDGETS.map((widget) => widget.id),
   )
+  const { data: dashboardPolicy } = useEmployeeDashboardPolicy()
   const { user } = useAuth()
   const { profile } = useProfile()
   const { data: config } = useAttendanceConfig()
@@ -430,6 +432,7 @@ export function EmployeeDashboard() {
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {preferences.order
           .filter((id) => !preferences.hidden.includes(id))
+          .filter((id) => dashboardPolicy?.get(id) !== false)
           .map((id) => (
             <div
               key={id}

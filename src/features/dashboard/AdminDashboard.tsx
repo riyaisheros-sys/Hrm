@@ -187,7 +187,12 @@ export function AdminDashboard() {
   )
   const { data: config } = useAttendanceConfig()
   const tz = config?.timezone ?? 'Asia/Kolkata'
-  const today = todayInTz(tz)
+  const realToday = todayInTz(tz)
+  // "There will be a date and calendar selector as per that dashboard data
+  // will show" — admin picks a date (defaults to today) and every date-scoped
+  // query here re-runs for it.
+  const [selectedDate, setSelectedDate] = useState(realToday)
+  const today = selectedDate
 
   const { data: users = [] } = useUsers()
   const { data: departments = [] } = useDepartments()
@@ -406,9 +411,33 @@ export function AdminDashboard() {
           <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
           <p className="mt-1 text-sm text-slate-600">Organisation overview · {dateLabel}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setCustomizing(true)}>
-          <Settings2 className="size-4" /> Customize
-        </Button>
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-slate-500" htmlFor="dash-date">
+            Date
+          </label>
+          <input
+            id="dash-date"
+            data-testid="dash-date-picker"
+            type="date"
+            value={selectedDate}
+            max={realToday}
+            onChange={(e) => setSelectedDate(e.target.value || realToday)}
+            className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700"
+          />
+          {selectedDate !== realToday && (
+            <button
+              type="button"
+              data-testid="dash-date-reset"
+              onClick={() => setSelectedDate(realToday)}
+              className="text-xs text-brand-600 hover:underline"
+            >
+              Reset to today
+            </button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setCustomizing(true)}>
+            <Settings2 className="size-4" /> Customize
+          </Button>
+        </div>
       </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {preferences.order

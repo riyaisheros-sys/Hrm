@@ -58,6 +58,7 @@ export const SIDEBAR_GROUP_FOR: Record<string, Record<string, string>> = {
     'nav-helpdesk-admin': 'support',
     'nav-recognition-admin': 'support',
     'nav-masters':      'system',
+    'nav-employee-panel': 'system',
     'nav-roles':        'system',
     'nav-audit':        'system',
   },

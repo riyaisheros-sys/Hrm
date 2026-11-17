@@ -42,10 +42,11 @@ import { HealthBadge } from '@/features/health/HealthBadge'
 import { SidebarCustomizer } from './SidebarCustomizer'
 import { useSidebarPreferences } from './sidebar-preferences'
 import { groupForNav, sidebarGroupsFor } from './sidebar-groups'
+import { useEmployeeSidebarPolicy } from '@/features/admin/employee-panel/hooks'
 import { useToast } from '@/components/ui/toast-context'
 import { cn } from '@/lib/cn'
 
-interface NavItem {
+export interface NavItem {
   to: string
   label: string
   icon: typeof LayoutDashboard
@@ -193,6 +194,13 @@ const adminNav: NavItem[] = [
     perm: 'users.manage',
   },
   {
+    to: '/admin/employee-panel',
+    label: 'Employee Panel',
+    icon: SlidersHorizontal,
+    testid: 'nav-employee-panel',
+    perm: 'users.manage',
+  },
+  {
     to: '/admin/audit',
     label: 'Audit Log',
     icon: ScrollText,
@@ -201,7 +209,7 @@ const adminNav: NavItem[] = [
   },
 ]
 
-const employeeNav: NavItem[] = [
+export const employeeNav: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
   {
     to: '/attendance',
@@ -251,8 +259,16 @@ export function AppShell({ children }: { children: ReactNode }) {
   // dropdowns). Dashboard always comes first because it is the "home" item.
   // Users who customize their sidebar still see their saved order — this only
   // controls the default for first-time use.
+  // Org-wide policy: admin can hide specific items for ALL employees. Applies
+  // only in the Employee view — admins keep full sidebar access regardless.
+  const { data: employeeSidebarPolicy } = useEmployeeSidebarPolicy()
   const permittedItems = (mode === 'admin' ? adminNav : employeeNav)
     .filter((item) => !item.perm || hasPermission(item.perm))
+    .filter((item) => {
+      if (mode !== 'employee') return true
+      const visible = employeeSidebarPolicy?.get(item.testid)
+      return visible !== false
+    })
     .sort((a, b) => {
       if (a.to === '/') return -1
       if (b.to === '/') return 1
