@@ -132,6 +132,15 @@ interface TaskRow {
     to_status: { name: string } | null
     changer: { full_name: string | null; email: string } | null
   }[]
+  planning_slots: {
+    plan_date: string
+    start_time: string | null
+    end_time: string | null
+    progress: number | null
+    remarks: string | null
+    challenges: string | null
+    task_name: string | null
+  }[]
 }
 interface ApprRow {
   attendance_score: number
@@ -318,7 +327,7 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     let q = supabase
       .from('tasks')
       .select(
-        'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by,to_status:task_statuses!task_status_history_to_status_id_fkey(name),changer:profiles!task_status_history_changed_by_fkey(full_name,email))',
+        'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by,to_status:task_statuses!task_status_history_to_status_id_fkey(name),changer:profiles!task_status_history_changed_by_fkey(full_name,email)),planning_slots(plan_date,start_time,end_time,progress,remarks,challenges,task_name)',
       )
     if (f.userId) q = q.eq('assignee_id', f.userId)
     if (f.from) q = q.gte('created_at', f.from)
@@ -375,6 +384,8 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
         { key: 'delayDays', label: 'Delay Days' },
         { key: 'delayComments', label: 'Delay Comments' },
         { key: 'remarks', label: 'Remarks' },
+        { key: 'planningUpdates', label: 'Planning Updates' },
+        { key: 'planningCount', label: 'Planning Slots' },
         { key: 'history', label: 'History' },
         { key: 'historyCount', label: 'History Entries' },
       ],
@@ -398,6 +409,30 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
             return note
               ? `${status} · ${when} by ${who} — ${note}`
               : `${status} · ${when} by ${who}`
+          })
+          .join('\n')
+        // Planning updates that reference this task (planning_slots.task_id).
+        // Chronological; one line per slot: "<date> [<slot window>] · <progress>%
+        // — <remarks or challenges>". So the admin sees everything the assignee
+        // wrote in Planning for this task, straight from the report.
+        const planningSlots = [...(t.planning_slots ?? [])].sort((a, b) => {
+          const d = a.plan_date.localeCompare(b.plan_date)
+          if (d !== 0) return d
+          return (a.start_time ?? '').localeCompare(b.start_time ?? '')
+        })
+        const planningUpdates = planningSlots
+          .map((s) => {
+            const date = formatDate(s.plan_date)
+            const win =
+              s.start_time && s.end_time
+                ? ` [${String(s.start_time).slice(0, 5)}–${String(s.end_time).slice(0, 5)}]`
+                : ''
+            const pct = typeof s.progress === 'number' ? ` · ${s.progress}%` : ''
+            const notes = [s.remarks?.trim(), s.challenges?.trim()]
+              .filter((x): x is string => !!x)
+              .join(' · ')
+            const task = s.task_name?.trim() && s.task_name.trim() !== t.title ? ` — ${s.task_name.trim()}` : ''
+            return `${date}${win}${pct}${task}${notes ? ` — ${notes}` : ''}`
           })
           .join('\n')
         const statusRemark = [...history]
@@ -434,6 +469,8 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
           delayDays: delay.isDelayed ? delay.days : 0,
           delayComments: delay.isDelayed ? statusRemark || t.remarks || '—' : '—',
           remarks: t.remarks ?? '—',
+          planningUpdates: planningUpdates || '—',
+          planningCount: planningSlots.length,
           history: historySummary || '—',
           historyCount: history.length,
         }

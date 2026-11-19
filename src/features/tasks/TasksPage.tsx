@@ -8,6 +8,7 @@ import {
   useDeleteStatus,
   useDeleteTask,
   useTaskHistory,
+  useTaskPlanning,
   useTaskCategories,
   useTaskStatuses,
   useTasks,
@@ -1289,26 +1290,93 @@ function StatusModal({ task, onClose }: { task: TaskRow; onClose: () => void }) 
 
 function HistoryModal({ task, onClose }: { task: TaskRow; onClose: () => void }) {
   const { data: history = [], isLoading } = useTaskHistory(task.id)
+  const { data: planning = [], isLoading: planningLoading } = useTaskPlanning(task.id)
   return (
     <Modal open onClose={onClose} title={`History: ${task.title}`} testid="history-modal">
-      {isLoading ? (
-        <p className="text-sm text-slate-500">Loading…</p>
-      ) : (
-        <ul className="space-y-3">
-          {history.map((h) => (
-            <li key={h.id} data-testid="history-entry" className="border-brand-200 border-l-2 pl-3">
-              <p className="text-sm font-medium text-slate-800">
-                {h.from_status?.name ? `${h.from_status.name} → ` : ''}
-                {h.to_status?.name}
-              </p>
-              <p className="text-xs text-slate-500">
-                {h.changer?.full_name || 'System'} · {formatDateTime(h.created_at)}
-              </p>
-              {h.remarks && <p className="mt-0.5 text-sm text-slate-600">{h.remarks}</p>}
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="space-y-5">
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Status history
+          </h3>
+          {isLoading ? (
+            <p className="text-sm text-slate-500">Loading…</p>
+          ) : history.length === 0 ? (
+            <p className="text-sm text-slate-400">No status changes yet.</p>
+          ) : (
+            <ul className="space-y-3">
+              {history.map((h) => (
+                <li
+                  key={h.id}
+                  data-testid="history-entry"
+                  className="border-brand-200 border-l-2 pl-3"
+                >
+                  <p className="text-sm font-medium text-slate-800">
+                    {h.from_status?.name ? `${h.from_status.name} → ` : ''}
+                    {h.to_status?.name}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    {h.changer?.full_name || 'System'} · {formatDateTime(h.created_at)}
+                  </p>
+                  {h.remarks && <p className="mt-0.5 text-sm text-slate-600">{h.remarks}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Planning updates
+          </h3>
+          {planningLoading ? (
+            <p className="text-sm text-slate-500">Loading…</p>
+          ) : planning.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              No planning slots have been linked to this task yet.
+            </p>
+          ) : (
+            <ul className="space-y-3" data-testid="planning-history">
+              {planning.map((s) => {
+                const win =
+                  s.start_time && s.end_time
+                    ? `${String(s.start_time).slice(0, 5)}–${String(s.end_time).slice(0, 5)}`
+                    : null
+                return (
+                  <li
+                    key={s.id}
+                    data-testid="planning-entry"
+                    className="border-brand-200 border-l-2 pl-3"
+                  >
+                    <p className="text-sm font-medium text-slate-800">
+                      {formatDate(s.plan_date)}
+                      {win && <span className="ml-2 text-xs font-normal text-slate-500">{win}</span>}
+                      {typeof s.progress === 'number' && (
+                        <Badge tone="blue" className="ml-2">
+                          {s.progress}%
+                        </Badge>
+                      )}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {s.user?.full_name || s.user?.email || 'Unknown'}
+                      {s.task_name && s.task_name !== task.title && (
+                        <span className="ml-1 italic text-slate-400">— {s.task_name}</span>
+                      )}
+                    </p>
+                    {s.remarks && (
+                      <p className="mt-0.5 text-sm text-slate-600">{s.remarks}</p>
+                    )}
+                    {s.challenges && (
+                      <p className="mt-0.5 text-sm text-amber-700">
+                        Challenge: {s.challenges}
+                      </p>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
     </Modal>
   )
 }

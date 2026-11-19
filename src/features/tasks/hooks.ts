@@ -270,6 +270,35 @@ export interface HistoryRow extends Tables<'task_status_history'> {
   changer: { full_name: string; email: string } | null
 }
 
+/** Planning slots that reference this task (planning_slots.task_id = taskId).
+ *  Shown next to the status history so the whole timeline is in one place. */
+export function useTaskPlanning(taskId: string | null) {
+  return useQuery({
+    queryKey: ['task-planning', taskId],
+    enabled: !!taskId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planning_slots')
+        .select('id,plan_date,start_time,end_time,progress,remarks,challenges,task_name,user:profiles!planning_slots_user_id_fkey(full_name,email)')
+        .eq('task_id', taskId!)
+        .order('plan_date', { ascending: false })
+        .order('start_time', { ascending: true })
+      if (error) throw error
+      return (data ?? []) as unknown as Array<{
+        id: string
+        plan_date: string
+        start_time: string | null
+        end_time: string | null
+        progress: number | null
+        remarks: string | null
+        challenges: string | null
+        task_name: string | null
+        user: { full_name: string | null; email: string } | null
+      }>
+    },
+  })
+}
+
 export function useTaskHistory(taskId: string | null) {
   return useQuery({
     queryKey: ['task-history', taskId],

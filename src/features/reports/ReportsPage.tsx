@@ -481,7 +481,13 @@ export function ReportsPage() {
                     // History / Description / Remarks / Rework-reason etc can be
                     // multi-line — keep whitespace and cap the visible area so
                     // the row stays scannable. Click to expand (title tooltip).
-                    const isLong = c.key === 'history' || c.key === 'description' || c.key === 'remarks' || c.key === 'reworkReason' || c.key === 'rejectionReason'
+                    const isLong =
+                      c.key === 'history' ||
+                      c.key === 'planningUpdates' ||
+                      c.key === 'description' ||
+                      c.key === 'remarks' ||
+                      c.key === 'reworkReason' ||
+                      c.key === 'rejectionReason'
                     return (
                       <Td key={c.key} className={isLong ? 'align-top' : undefined}>
                         {meta ? (
