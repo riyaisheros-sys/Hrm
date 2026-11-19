@@ -22,32 +22,51 @@ function storageKey(page: string) {
   return `hrms-col-config:${page}`
 }
 
-function readLocal(page: string, all: ColumnDef[]): ColumnPref {
+function readLocalRaw(page: string): ColumnPref | null {
   try {
     const raw = JSON.parse(localStorage.getItem(storageKey(page)) ?? 'null') as ColumnPref | null
-    if (!raw) throw new Error('empty')
-    // Drop ids that no longer exist in the catalog (schema drift), and append
-    // any new ids to the end so new columns are visible by default.
-    const known = new Set(all.map((c) => c.id))
-    const order = raw.order.filter((id) => known.has(id))
-    for (const c of all) if (!order.includes(c.id)) order.push(c.id)
-    const hidden = raw.hidden.filter((id) => known.has(id))
-    const colors: Record<string, string> = {}
-    for (const [k, v] of Object.entries(raw.colors ?? {})) {
-      if (known.has(k) && typeof v === 'string') colors[k] = v
+    if (!raw) return null
+    return {
+      order: Array.isArray(raw.order) ? raw.order : [],
+      hidden: Array.isArray(raw.hidden) ? raw.hidden : [],
+      colors: raw.colors && typeof raw.colors === 'object' ? raw.colors : {},
     }
-    return { order, hidden, colors }
   } catch {
-    return { order: all.map((c) => c.id), hidden: [], colors: {} }
+    return null
+  }
+}
+
+function writeLocal(page: string, pref: ColumnPref) {
+  try {
+    localStorage.setItem(storageKey(page), JSON.stringify(pref))
+  } catch {
+    /* private mode / full storage — in-memory only */
   }
 }
 
 export function useColumnConfig(page: string, all: ColumnDef[]) {
-  const [pref, setPref] = useState<ColumnPref>(() => readLocal(page, all))
+  // Initial state: whatever is in storage (don't filter by `all` — the catalog
+  // may not be loaded yet, filtering here would wipe saved order/hidden/colors).
+  const [pref, setPref] = useState<ColumnPref>(() => {
+    const raw = readLocalRaw(page)
+    if (raw) return raw
+    return { order: all.map((c) => c.id), hidden: [], colors: {} }
+  })
 
-  // If the catalog grows (new columns added), re-sync the stored order so
-  // new columns appear at the end without resetting user choices.
+  // When `page` changes (e.g. user switches report type), re-read storage so
+  // each page keeps its own layout.
   useEffect(() => {
+    const raw = readLocalRaw(page)
+    setPref(
+      raw ?? { order: all.map((c) => c.id), hidden: [], colors: {} },
+    )
+  }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Once the catalog arrives, merge: drop ids no longer in the catalog and
+  // append any brand-new ids to the end. Persist the merged shape so refresh
+  // keeps the same layout.
+  useEffect(() => {
+    if (all.length === 0) return
     setPref((prev) => {
       const known = new Set(all.map((c) => c.id))
       const order = prev.order.filter((id) => known.has(id))
@@ -58,17 +77,24 @@ export function useColumnConfig(page: string, all: ColumnDef[]) {
           changed = true
         }
       }
-      return changed ? { order, hidden: prev.hidden.filter((id) => known.has(id)) } : prev
+      const hidden = prev.hidden.filter((id) => known.has(id))
+      const hiddenChanged = hidden.length !== prev.hidden.length
+      const colorsBefore = prev.colors ?? {}
+      const colors: Record<string, string> = {}
+      for (const [k, v] of Object.entries(colorsBefore)) {
+        if (known.has(k) && typeof v === 'string') colors[k] = v
+      }
+      const colorsChanged = Object.keys(colors).length !== Object.keys(colorsBefore).length
+      if (!changed && !hiddenChanged && !colorsChanged) return prev
+      const next: ColumnPref = { order, hidden, colors }
+      writeLocal(page, next)
+      return next
     })
-  }, [all])
+  }, [all, page])
 
   function save(next: ColumnPref) {
     setPref(next)
-    try {
-      localStorage.setItem(storageKey(page), JSON.stringify(next))
-    } catch {
-      /* private mode / full storage — fine, in-memory only */
-    }
+    writeLocal(page, next)
   }
 
   const visible = useMemo<ColumnDef[]>(() => {

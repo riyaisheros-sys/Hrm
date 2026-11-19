@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { FileSpreadsheet, FileText, X } from 'lucide-react'
 import { REPORT_LABELS, useAllowedReportFields, useReport, type ReportType } from './hooks'
 import { exportExcel, exportPdf, type CellFill } from './export'
@@ -8,6 +8,7 @@ import { useUsers } from '@/features/admin/users/hooks'
 import { useTaskCategories } from '@/features/tasks/hooks'
 import { ColumnChips } from '@/components/ui/ColumnChips'
 import { useColumnConfig } from '@/lib/useColumnConfig'
+import { usePersistedState } from '@/lib/usePersistedState'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -46,13 +47,14 @@ const attendanceFill: CellFill = (row, key) => {
 }
 
 export function ReportsPage() {
-  const [type, setType] = useState<ReportType>('attendance')
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [userId, setUserId] = useState('')
-  const [status, setStatus] = useState('')
-  const [category, setCategory] = useState('')
-  const [priority, setPriority] = useState('')
+  // Reports filters persist across refresh so admins keep their last choice.
+  const [type, setType] = usePersistedState<ReportType>('hrms-reports:type', 'attendance')
+  const [from, setFrom] = usePersistedState('hrms-reports:from', '')
+  const [to, setTo] = usePersistedState('hrms-reports:to', '')
+  const [userId, setUserId] = usePersistedState('hrms-reports:user', '')
+  const [status, setStatus] = usePersistedState('hrms-reports:status', '')
+  const [category, setCategory] = usePersistedState('hrms-reports:category', '')
+  const [priority, setPriority] = usePersistedState('hrms-reports:priority', '')
   const { data: users = [] } = useUsers()
   const { data: taskCategories = [] } = useTaskCategories()
   const { data, isLoading } = useReport(type, {
@@ -182,25 +184,66 @@ export function ReportsPage() {
           </div>
         )}
         {type === 'task' && (
-          <div>
-            <Label htmlFor="report-task-group" className="text-xs text-slate-500">
-              Task group
-            </Label>
-            <Select
-              id="report-task-group"
-              data-testid="report-task-group"
-              value={category}
-              onChange={(event) => setCategory(event.target.value)}
-              className="w-44"
-            >
-              <option value="">All groups</option>
-              {taskCategories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <>
+            <div>
+              <Label htmlFor="report-task-group" className="text-xs text-slate-500">
+                Task group
+              </Label>
+              <Select
+                id="report-task-group"
+                data-testid="report-task-group"
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                className="w-44"
+              >
+                <option value="">All groups</option>
+                {taskCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="report-task-status" className="text-xs text-slate-500">
+                Task status
+              </Label>
+              <Select
+                id="report-task-status"
+                data-testid="report-task-status"
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+                className="w-44"
+              >
+                <option value="">All statuses</option>
+                <option value="pending">Pending</option>
+                <option value="accepted">Accepted</option>
+                <option value="in_progress">In Progress</option>
+                <option value="on_hold">On Hold</option>
+                <option value="awaiting_approval">Awaiting Approval</option>
+                <option value="rework">Rework</option>
+                <option value="completed">Completed</option>
+                <option value="rejected">Rejected</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="report-task-priority" className="text-xs text-slate-500">
+                Priority
+              </Label>
+              <Select
+                id="report-task-priority"
+                data-testid="report-task-priority"
+                value={priority}
+                onChange={(event) => setPriority(event.target.value)}
+                className="w-36"
+              >
+                <option value="">All priorities</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </Select>
+            </div>
+          </>
         )}
         {type === 'helpdesk' && (
           <>

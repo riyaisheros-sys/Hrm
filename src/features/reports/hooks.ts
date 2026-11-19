@@ -314,6 +314,16 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     if (f.from) q = q.gte('created_at', f.from)
     if (f.to) q = q.lte('created_at', `${f.to}T23:59:59`)
     if (f.category) q = q.eq('category_id', f.category)
+    if (f.priority) q = q.eq('priority', f.priority)
+    // Status filter targets the task_statuses.slug via FK join.
+    if (f.status) {
+      const { data: s } = await supabase
+        .from('task_statuses')
+        .select('id')
+        .eq('slug', f.status)
+        .maybeSingle()
+      if (s?.id) q = q.eq('status_id', s.id)
+    }
     const { data, error } = await q.order('created_at', { ascending: false }).limit(1000)
     if (error) throw error
     const list = (data ?? []) as unknown as TaskRow[]
