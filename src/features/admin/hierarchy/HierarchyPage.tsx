@@ -104,116 +104,113 @@ export function HierarchyPage() {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Departments */}
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
-              Departments
-            </h2>
-            {canManage && (
-              <Button
-                size="sm"
-                data-testid="new-department-button"
-                onClick={() => setDeptModal(true)}
-              >
-                <Plus className="size-4" /> New
-              </Button>
-            )}
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
+          Departments &amp; Teams
+        </h2>
+        {canManage && (
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="new-department-button"
+              onClick={() => setDeptModal(true)}
+            >
+              <Plus className="size-4" /> Department
+            </Button>
+            <Button size="sm" data-testid="new-team-button" onClick={() => setTeamModal(true)}>
+              <Plus className="size-4" /> Team
+            </Button>
           </div>
-          {departments.length === 0 ? (
-            <EmptyState title="No departments yet" testid="departments-empty" />
-          ) : (
-            <Table data-testid="departments-table">
-              <Thead>
-                <tr>
-                  <Th>Name</Th>
-                  <Th>Company</Th>
-                  <Th className="w-10" />
-                </tr>
-              </Thead>
-              <Tbody>
-                {departments.map((d) => (
+        )}
+      </div>
+
+      {departments.length === 0 && teams.length === 0 ? (
+        <EmptyState title="No departments or teams yet" testid="hierarchy-empty" />
+      ) : (
+        <Table data-testid="hierarchy-table">
+          <Thead>
+            <tr>
+              <Th className="w-10">S.No</Th>
+              <Th>Department</Th>
+              <Th>Team</Th>
+              <Th>Manager</Th>
+              <Th>Company</Th>
+              <Th className="w-20 text-right">Actions</Th>
+            </tr>
+          </Thead>
+          <Tbody>
+            {departments.flatMap((d, deptIdx) => {
+              const deptTeams = teams.filter((t) => t.department_id === d.id)
+              if (deptTeams.length === 0) {
+                return [
                   <tr key={d.id} data-testid="department-row">
+                    <Td className="text-xs text-slate-400 tabular-nums">{deptIdx + 1}</Td>
                     <Td className="font-medium text-slate-900">{d.name}</Td>
+                    <Td className="text-xs italic text-slate-400">No teams</Td>
+                    <Td>—</Td>
                     <Td>{d.company?.name ?? '—'}</Td>
                     <Td>
+                      <div className="flex justify-end">
+                        {canManage && (
+                          <button
+                            aria-label={`Delete ${d.name}`}
+                            className="text-slate-400 hover:text-red-600"
+                            onClick={() =>
+                              delDept.mutate(d.id, {
+                                onError: (e) =>
+                                  toast.error('Delete failed', (e as Error).message),
+                              })
+                            }
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        )}
+                      </div>
+                    </Td>
+                  </tr>,
+                ]
+              }
+              return deptTeams.map((t, i) => (
+                <tr key={t.id} data-testid="hierarchy-row" data-dept={d.name} data-team={t.name}>
+                  <Td className="text-xs text-slate-400 tabular-nums">
+                    {i === 0 ? `${deptIdx + 1}` : ''}
+                  </Td>
+                  <Td className={i === 0 ? 'font-medium text-slate-900' : 'text-slate-400'}>
+                    {i === 0 ? d.name : '↳'}
+                  </Td>
+                  <Td className="font-medium text-slate-800">{t.name}</Td>
+                  <Td>
+                    {canManage ? (
+                      <Select
+                        aria-label={`Manager for ${t.name}`}
+                        value={t.reporting_manager_id ?? ''}
+                        onChange={(e) =>
+                          updateManager.mutate({
+                            teamId: t.id,
+                            managerId: e.target.value || null,
+                          })
+                        }
+                        className="h-8 text-xs"
+                      >
+                        <option value="">— None —</option>
+                        {users.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.full_name || u.email}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      (users.find((u) => u.id === t.reporting_manager_id)?.full_name ?? '—')
+                    )}
+                  </Td>
+                  <Td className="text-slate-500">{i === 0 ? (d.company?.name ?? '—') : ''}</Td>
+                  <Td>
+                    <div className="flex justify-end gap-1">
                       {canManage && (
                         <button
-                          aria-label={`Delete ${d.name}`}
-                          className="text-slate-400 hover:text-red-600"
-                          onClick={() =>
-                            delDept.mutate(d.id, {
-                              onError: (e) => toast.error('Delete failed', (e as Error).message),
-                            })
-                          }
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      )}
-                    </Td>
-                  </tr>
-                ))}
-              </Tbody>
-            </Table>
-          )}
-        </div>
-
-        {/* Teams */}
-        <div>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">Teams</h2>
-            {canManage && (
-              <Button size="sm" data-testid="new-team-button" onClick={() => setTeamModal(true)}>
-                <Plus className="size-4" /> New
-              </Button>
-            )}
-          </div>
-          {teams.length === 0 ? (
-            <EmptyState title="No teams yet" testid="teams-empty" />
-          ) : (
-            <Table data-testid="teams-table">
-              <Thead>
-                <tr>
-                  <Th>Name</Th>
-                  <Th>Department</Th>
-                  <Th>Manager</Th>
-                  <Th className="w-10" />
-                </tr>
-              </Thead>
-              <Tbody>
-                {teams.map((t) => (
-                  <tr key={t.id} data-testid="team-row">
-                    <Td className="font-medium text-slate-900">{t.name}</Td>
-                    <Td>{t.department?.name ?? '—'}</Td>
-                    <Td>
-                      {canManage ? (
-                        <Select
-                          aria-label={`Manager for ${t.name}`}
-                          value={t.reporting_manager_id ?? ''}
-                          onChange={(e) =>
-                            updateManager.mutate({
-                              teamId: t.id,
-                              managerId: e.target.value || null,
-                            })
-                          }
-                          className="h-8 text-xs"
-                        >
-                          <option value="">— None —</option>
-                          {users.map((u) => (
-                            <option key={u.id} value={u.id}>
-                              {u.full_name || u.email}
-                            </option>
-                          ))}
-                        </Select>
-                      ) : (
-                        (users.find((u) => u.id === t.reporting_manager_id)?.full_name ?? '—')
-                      )}
-                    </Td>
-                    <Td>
-                      {canManage && (
-                        <button
-                          aria-label={`Delete ${t.name}`}
+                          aria-label={`Delete team ${t.name}`}
+                          title={`Delete team ${t.name}`}
                           className="text-slate-400 hover:text-red-600"
                           onClick={() =>
                             delTeam.mutate(t.id, {
@@ -224,14 +221,28 @@ export function HierarchyPage() {
                           <Trash2 className="size-4" />
                         </button>
                       )}
-                    </Td>
-                  </tr>
-                ))}
-              </Tbody>
-            </Table>
-          )}
-        </div>
-      </div>
+                      {canManage && i === 0 && (
+                        <button
+                          aria-label={`Delete department ${d.name}`}
+                          title={`Delete department ${d.name}`}
+                          className="text-slate-300 hover:text-red-600"
+                          onClick={() =>
+                            delDept.mutate(d.id, {
+                              onError: (e) => toast.error('Delete failed', (e as Error).message),
+                            })
+                          }
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      )}
+                    </div>
+                  </Td>
+                </tr>
+              ))
+            })}
+          </Tbody>
+        </Table>
+      )}
 
       <DepartmentModal open={deptModal} onClose={() => setDeptModal(false)} companies={companies} />
       <TeamModal open={teamModal} onClose={() => setTeamModal(false)} departments={departments} />
