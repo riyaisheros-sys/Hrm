@@ -31,7 +31,7 @@ import { Checkbox } from '@/components/ui/Checkbox'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
-import { ColumnConfigButton } from '@/components/ui/ColumnConfigButton'
+import { ColumnChips } from '@/components/ui/ColumnChips'
 import { useColumnConfig } from '@/lib/useColumnConfig'
 
 export function UsersPage() {
@@ -68,25 +68,36 @@ export function UsersPage() {
         title="Users"
         description="View users, assign roles, departments, teams and reporting managers."
         actions={
-          <div className="flex items-center gap-2">
-            <ColumnConfigButton config={colConfig} testid="users-columns" />
-            {canManage && (
-              <Button data-testid="add-employee-button" onClick={() => setAdding(true)}>
-                <Plus className="size-4" /> Add employee
-              </Button>
-            )}
-          </div>
+          canManage && (
+            <Button data-testid="add-employee-button" onClick={() => setAdding(true)}>
+              <Plus className="size-4" /> Add employee
+            </Button>
+          )
         }
+      />
+
+      <ColumnChips
+        config={colConfig}
+        title="Display headings"
+        testid="users-chips"
+        className="mb-3"
       />
 
       <Table data-testid="users-table">
         <Thead>
           <tr>
-            {colConfig.visible.map((c) => (
-              <Th key={c.id} className={c.id === 'sno' ? 'w-10' : undefined}>
-                {c.label}
-              </Th>
-            ))}
+            {colConfig.visible.map((c) => {
+              const color = colConfig.colorOf(c.id)
+              return (
+                <Th
+                  key={c.id}
+                  className={c.id === 'sno' ? 'w-10' : undefined}
+                  style={color ? { color } : undefined}
+                >
+                  {c.label}
+                </Th>
+              )
+            })}
             {canManage && <Th className="w-10" />}
           </tr>
         </Thead>

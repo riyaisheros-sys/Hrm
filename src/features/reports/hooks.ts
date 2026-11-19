@@ -98,18 +98,30 @@ interface SalaryRow {
   employee: Person
 }
 interface TaskRow {
+  id: string
   title: string
+  description: string | null
   priority: string
   due_date: string | null
   created_at: string
+  updated_at: string | null
   completed_at: string | null
+  accepted_at: string | null
+  submitted_at: string | null
+  approved_at: string | null
+  rejected_at: string | null
+  rejection_reason: string | null
+  rework_reason: string | null
   progress_percent: number
   remarks: string | null
-  status: { name: string } | null
+  task_type: string | null
+  bulk_key: string | null
+  status: { name: string; slug: string; is_terminal: boolean } | null
   category: { name: string } | null
-  assignee: Person
-  creator: Person
-  task_status_history: { remarks: string | null; created_at: string }[]
+  assignee: (Person & { employee_code?: string | null }) | null
+  creator: (Person & { employee_code?: string | null }) | null
+  approver: Person | null
+  task_status_history: { remarks: string | null; created_at: string; changed_by: string | null }[]
 }
 interface ApprRow {
   attendance_score: number
@@ -267,7 +279,7 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     let q = supabase
       .from('tasks')
       .select(
-        'title,priority,due_date,created_at,completed_at,progress_percent,remarks, status:task_statuses(name), category:task_categories(name), assignee:profiles!tasks_assignee_id_fkey(full_name,email), creator:profiles!tasks_created_by_fkey(full_name,email), task_status_history(remarks,created_at)',
+        'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by)',
       )
     if (f.userId) q = q.eq('assignee_id', f.userId)
     if (f.from) q = q.gte('created_at', f.from)
@@ -279,40 +291,79 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     return {
       title: 'Task Report',
       filename: 'task-report',
+      // Every field the task row carries is exposed; admin can hide/reorder
+      // in Window 2. "Show every detail" per client request (19 Nov).
       columns: [
+        { key: 'id', label: 'Task ID' },
         { key: 'taskGroup', label: 'Task Group' },
         { key: 'title', label: 'Task' },
+        { key: 'description', label: 'Description' },
         { key: 'assignee', label: 'Assignee' },
+        { key: 'assigneeEmail', label: 'Assignee Email' },
+        { key: 'assigneeCode', label: 'Assignee Code' },
         { key: 'assignor', label: 'Assigned By' },
+        { key: 'assignorEmail', label: 'Assignor Email' },
         { key: 'status', label: 'Status' },
+        { key: 'statusSlug', label: 'Status Slug' },
         { key: 'priority', label: 'Priority' },
         { key: 'progress', label: 'Completion %' },
+        { key: 'taskType', label: 'Task Type' },
+        { key: 'bulkKey', label: 'Bulk Key' },
         { key: 'created', label: 'Created Date' },
+        { key: 'updated', label: 'Last Updated' },
         { key: 'due', label: 'Due Date' },
+        { key: 'accepted', label: 'Accepted At' },
+        { key: 'submitted', label: 'Submitted At' },
+        { key: 'approved', label: 'Approved At' },
+        { key: 'approver', label: 'Approved By' },
+        { key: 'rejected', label: 'Rejected At' },
+        { key: 'rejectionReason', label: 'Rejection Reason' },
+        { key: 'reworkReason', label: 'Rework Reason' },
         { key: 'completed', label: 'Actual Completion Date' },
         { key: 'delayStatus', label: 'Delay Status' },
         { key: 'delayDays', label: 'Delay Days' },
         { key: 'delayComments', label: 'Delay Comments' },
+        { key: 'remarks', label: 'Remarks' },
+        { key: 'historyCount', label: 'History Entries' },
       ],
       rows: list.map((t) => {
         const delay = getTaskDelay(t.due_date, t.completed_at)
-        const statusRemark = [...(t.task_status_history ?? [])]
+        const history = t.task_status_history ?? []
+        const statusRemark = [...history]
           .sort((a, b) => b.created_at.localeCompare(a.created_at))
           .find((entry) => entry.remarks?.trim())?.remarks
         return {
+          id: t.id,
           taskGroup: t.category?.name ?? '—',
           title: t.title,
+          description: t.description ?? '—',
           assignee: name(t.assignee),
+          assigneeEmail: t.assignee?.email ?? '—',
+          assigneeCode: t.assignee?.employee_code ?? '—',
           assignor: name(t.creator),
+          assignorEmail: t.creator?.email ?? '—',
           status: t.status?.name,
+          statusSlug: t.status?.slug ?? '—',
           priority: t.priority,
           progress: t.progress_percent,
+          taskType: t.task_type ?? '—',
+          bulkKey: t.bulk_key ?? '—',
           created: formatDate(t.created_at),
+          updated: formatDate(t.updated_at),
           due: formatDate(t.due_date),
+          accepted: formatDate(t.accepted_at),
+          submitted: formatDate(t.submitted_at),
+          approved: formatDate(t.approved_at),
+          approver: name(t.approver),
+          rejected: formatDate(t.rejected_at),
+          rejectionReason: t.rejection_reason ?? '—',
+          reworkReason: t.rework_reason ?? '—',
           completed: formatDate(t.completed_at),
           delayStatus: delay.label,
           delayDays: delay.isDelayed ? delay.days : 0,
           delayComments: delay.isDelayed ? statusRemark || t.remarks || '—' : '—',
+          remarks: t.remarks ?? '—',
+          historyCount: history.length,
         }
       }),
     }

@@ -6,6 +6,8 @@ import { ATTENDANCE_STATUS, LEGEND, SUNDAY_META } from '@/features/attendance/st
 import { Badge } from '@/components/ui/Badge'
 import { useUsers } from '@/features/admin/users/hooks'
 import { useTaskCategories } from '@/features/tasks/hooks'
+import { ColumnChips } from '@/components/ui/ColumnChips'
+import { useColumnConfig } from '@/lib/useColumnConfig'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -62,13 +64,20 @@ export function ReportsPage() {
     priority: priority || undefined,
   })
   const { data: allowedFields = new Map<string, boolean>() } = useAllowedReportFields(type)
-  const [hiddenColumns, setHiddenColumns] = useState<string[]>([])
+  const catalogColumns = useMemo(
+    () =>
+      (data?.columns ?? [])
+        .filter((c) => allowedFields.get(c.key) ?? true)
+        .map((c) => ({ id: c.key, label: c.label })),
+    [data?.columns, allowedFields],
+  )
+  const colConfig = useColumnConfig(`reports:${type}`, catalogColumns)
   const visibleColumns = useMemo(
     () =>
-      data?.columns.filter(
-        (column) => !hiddenColumns.includes(column.key) && (allowedFields.get(column.key) ?? true),
-      ) ?? [],
-    [allowedFields, data?.columns, hiddenColumns],
+      colConfig.visible
+        .map((v) => data?.columns.find((c) => c.key === v.id))
+        .filter((c): c is NonNullable<typeof c> => !!c),
+    [colConfig.visible, data?.columns],
   )
   const hasFilters = !!(from || to || userId || status || category || priority)
 
@@ -114,10 +123,7 @@ export function ReportsPage() {
             id="report-category"
             data-testid="report-category"
             value={type}
-            onChange={(event) => {
-              setType(event.target.value as ReportType)
-              setHiddenColumns([])
-            }}
+            onChange={(event) => setType(event.target.value as ReportType)}
             className="mt-1 w-full"
           >
             {TYPES.map((reportType) => (
@@ -127,27 +133,11 @@ export function ReportsPage() {
             ))}
           </Select>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <p className="text-sm font-medium text-slate-700">Window 2 · Display headings</p>
-          <div className="mt-2 flex max-h-28 flex-wrap gap-x-4 gap-y-2 overflow-auto">
-            {data?.columns.map((column) => (
-              <label key={column.key} className="flex items-center gap-1.5 text-sm text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={!hiddenColumns.includes(column.key)}
-                  onChange={() =>
-                    setHiddenColumns((current) =>
-                      current.includes(column.key)
-                        ? current.filter((key) => key !== column.key)
-                        : [...current, column.key],
-                    )
-                  }
-                />
-                {column.label}
-              </label>
-            ))}
-          </div>
-        </div>
+        <ColumnChips
+          config={colConfig}
+          title="Window 2 · Display headings"
+          testid="report-chips"
+        />
       </div>
 
       <div className="mb-4 flex flex-wrap items-end gap-3" data-testid="report-filters">
@@ -312,9 +302,14 @@ export function ReportsPage() {
           <Table data-testid="report-table">
             <Thead>
               <tr>
-                {visibleColumns.map((c) => (
-                  <Th key={c.key}>{c.label}</Th>
-                ))}
+                {visibleColumns.map((c) => {
+                  const color = colConfig.colorOf(c.key)
+                  return (
+                    <Th key={c.key} style={color ? { color } : undefined}>
+                      {c.label}
+                    </Th>
+                  )
+                })}
               </tr>
             </Thead>
             <Tbody>

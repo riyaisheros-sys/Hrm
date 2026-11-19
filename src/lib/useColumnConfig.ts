@@ -14,6 +14,8 @@ export interface ColumnDef {
 export interface ColumnPref {
   order: string[]
   hidden: string[]
+  /** Per-column header colour (hex or CSS colour). */
+  colors?: Record<string, string>
 }
 
 function storageKey(page: string) {
@@ -30,9 +32,13 @@ function readLocal(page: string, all: ColumnDef[]): ColumnPref {
     const order = raw.order.filter((id) => known.has(id))
     for (const c of all) if (!order.includes(c.id)) order.push(c.id)
     const hidden = raw.hidden.filter((id) => known.has(id))
-    return { order, hidden }
+    const colors: Record<string, string> = {}
+    for (const [k, v] of Object.entries(raw.colors ?? {})) {
+      if (known.has(k) && typeof v === 'string') colors[k] = v
+    }
+    return { order, hidden, colors }
   } catch {
-    return { order: all.map((c) => c.id), hidden: [] }
+    return { order: all.map((c) => c.id), hidden: [], colors: {} }
   }
 }
 
@@ -92,8 +98,19 @@ export function useColumnConfig(page: string, all: ColumnDef[]) {
   }
 
   function reset() {
-    save({ order: all.map((c) => c.id), hidden: [] })
+    save({ order: all.map((c) => c.id), hidden: [], colors: {} })
   }
 
-  return { pref, visible, toggle, move, reset, all }
+  function setColor(id: string, color: string | null) {
+    const next = { ...(pref.colors ?? {}) }
+    if (!color) delete next[id]
+    else next[id] = color
+    save({ ...pref, colors: next })
+  }
+
+  function colorOf(id: string): string | undefined {
+    return pref.colors?.[id]
+  }
+
+  return { pref, visible, toggle, move, reset, setColor, colorOf, all }
 }

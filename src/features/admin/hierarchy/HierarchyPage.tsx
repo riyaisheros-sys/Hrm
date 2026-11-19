@@ -23,7 +23,7 @@ import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Card, CardBody } from '@/components/ui/Card'
-import { ColumnConfigButton } from '@/components/ui/ColumnConfigButton'
+import { ColumnChips } from '@/components/ui/ColumnChips'
 import { useColumnConfig } from '@/lib/useColumnConfig'
 import { cn } from '@/lib/cn'
 
@@ -226,25 +226,29 @@ export function HierarchyPage() {
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
           Departments &amp; Teams
         </h2>
-        <div className="flex items-center gap-2">
-          <ColumnConfigButton config={colConfig} testid="hierarchy-columns" />
-          {canManage && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                data-testid="new-department-button"
-                onClick={() => setDeptModal(true)}
-              >
-                <Plus className="size-4" /> Department
-              </Button>
-              <Button size="sm" data-testid="new-team-button" onClick={() => setTeamModal(true)}>
-                <Plus className="size-4" /> Team
-              </Button>
-            </>
-          )}
-        </div>
+        {canManage && (
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              data-testid="new-department-button"
+              onClick={() => setDeptModal(true)}
+            >
+              <Plus className="size-4" /> Department
+            </Button>
+            <Button size="sm" data-testid="new-team-button" onClick={() => setTeamModal(true)}>
+              <Plus className="size-4" /> Team
+            </Button>
+          </div>
+        )}
       </div>
+
+      <ColumnChips
+        config={colConfig}
+        title="Display headings"
+        testid="hierarchy-chips"
+        className="mb-3"
+      />
 
       <div className="mb-3 flex flex-wrap items-end gap-3" data-testid="hierarchy-filters">
         <div>
@@ -320,17 +324,21 @@ export function HierarchyPage() {
         <Table data-testid="hierarchy-table">
           <Thead>
             <tr>
-              {colConfig.visible.map((c) => (
-                <Th
-                  key={c.id}
-                  className={cn(
-                    c.id === 'sno' && 'w-10',
-                    c.id === 'actions' && 'w-20 text-right',
-                  )}
-                >
-                  {c.label}
-                </Th>
-              ))}
+              {colConfig.visible.map((c) => {
+                const color = colConfig.colorOf(c.id)
+                return (
+                  <Th
+                    key={c.id}
+                    className={cn(
+                      c.id === 'sno' && 'w-10',
+                      c.id === 'actions' && 'w-20 text-right',
+                    )}
+                    style={color ? { color } : undefined}
+                  >
+                    {c.label}
+                  </Th>
+                )
+              })}
             </tr>
           </Thead>
           <Tbody>
