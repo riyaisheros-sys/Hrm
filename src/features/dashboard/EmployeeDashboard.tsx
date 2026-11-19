@@ -129,7 +129,11 @@ export function EmployeeDashboard() {
   const { profile } = useProfile()
   const { data: config } = useAttendanceConfig()
   const tz = config?.timezone ?? 'Asia/Kolkata'
-  const today = todayInTz(tz)
+  const realToday = todayInTz(tz)
+  // Same as Admin: pick any date (defaults to today) and all date-scoped
+  // widgets re-run for it.
+  const [selectedDate, setSelectedDate] = useState(realToday)
+  const today = selectedDate
 
   const { data: att } = useMyAttendance(today)
   const { data: tasks = [] } = useTasks()
@@ -425,9 +429,33 @@ export function EmployeeDashboard() {
           </h1>
           <p className="mt-1 text-sm text-slate-600">Your self-service home · {dateLabel}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setCustomizing(true)}>
-          <Settings2 className="size-4" /> Customize
-        </Button>
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-slate-500" htmlFor="emp-dash-date">
+            Date
+          </label>
+          <input
+            id="emp-dash-date"
+            data-testid="emp-dash-date-picker"
+            type="date"
+            value={selectedDate}
+            max={realToday}
+            onChange={(e) => setSelectedDate(e.target.value || realToday)}
+            className="h-9 rounded-md border border-slate-200 bg-white px-2 text-sm text-slate-700"
+          />
+          {selectedDate !== realToday && (
+            <button
+              type="button"
+              data-testid="emp-dash-date-reset"
+              onClick={() => setSelectedDate(realToday)}
+              className="text-brand-600 text-xs hover:underline"
+            >
+              Reset to today
+            </button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setCustomizing(true)}>
+            <Settings2 className="size-4" /> Customize
+          </Button>
+        </div>
       </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {preferences.order
