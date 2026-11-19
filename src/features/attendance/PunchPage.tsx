@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/toast-context'
+import { Modal } from '@/components/ui/Modal'
 
 const STATUS_LABEL: Record<string, string> = Object.fromEntries(
   Object.entries(ATTENDANCE_STATUS).map(([k, v]) => [k, v.label]),
@@ -26,6 +27,7 @@ export function PunchPage() {
   const { data, isLoading } = useMyAttendance(workDate)
   const toast = useToast()
   const [modalType, setModalType] = useState<'in' | 'out' | null>(null)
+  const [summary, setSummary] = useState<PunchResult | null>(null)
 
   const open = data?.open ?? false
   const day = data?.day
@@ -38,10 +40,13 @@ export function PunchPage() {
 
   function handleSuccess(res: PunchResult) {
     setModalType(null)
-    toast.success(
-      res.punch_type === 'in' ? 'Punched in' : 'Punched out',
-      res.status ? `Status: ${STATUS_LABEL[res.status] ?? res.status}` : undefined,
-    )
+    if (res.punch_type === 'out') {
+      // Show the end-of-day summary so the employee sees their final
+      // attendance status, worked time, late / OT in one place.
+      setSummary(res)
+    } else {
+      toast.success('Punched in', 'Have a good day.')
+    }
   }
 
   return (
@@ -160,6 +165,86 @@ export function PunchPage() {
           onSuccess={handleSuccess}
         />
       )}
+
+      {summary && (
+        <PunchOutSummaryModal summary={summary} onClose={() => setSummary(null)} />
+      )}
     </div>
+  )
+}
+
+function PunchOutSummaryModal({
+  summary,
+  onClose,
+}: {
+  summary: PunchResult
+  onClose: () => void
+}) {
+  const statusKey = summary.status ?? ''
+  const statusMeta = ATTENDANCE_STATUS[statusKey]
+  const statusLabel = STATUS_LABEL[statusKey] ?? statusKey ?? '—'
+  const worked = summary.worked_minutes ?? 0
+  const late = summary.is_late ? (summary.late_minutes ?? 0) : 0
+  const ot = summary.overtime_minutes ?? 0
+  return (
+    <Modal open onClose={onClose} title="You're punched out" testid="punchout-summary-modal">
+      <div className="space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-center">
+          <p className="text-xs uppercase tracking-wide text-slate-500">Today's attendance</p>
+          <p
+            data-testid="punchout-status"
+            data-status={statusKey}
+            className="mt-1 inline-block rounded-full px-3 py-1 text-base font-bold"
+            style={
+              statusMeta
+                ? {
+                    background: `rgb(${statusMeta.rgb[0]}, ${statusMeta.rgb[1]}, ${statusMeta.rgb[2]})`,
+                    color: '#fff',
+                  }
+                : { background: '#334155', color: '#fff' }
+            }
+          >
+            {statusLabel}
+          </p>
+        </div>
+        <dl className="grid grid-cols-2 gap-3 text-sm">
+          <div className="rounded-md border border-slate-200 bg-white p-3">
+            <dt className="text-xs text-slate-500">Worked</dt>
+            <dd data-testid="punchout-worked" className="text-lg font-semibold text-slate-900">
+              {formatMinutes(worked)}
+            </dd>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-white p-3">
+            <dt className="text-xs text-slate-500">Late by</dt>
+            <dd data-testid="punchout-late" className="text-lg font-semibold text-slate-900">
+              {late > 0 ? formatLateBy(late) : '—'}
+            </dd>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-white p-3">
+            <dt className="text-xs text-slate-500">Overtime</dt>
+            <dd data-testid="punchout-overtime" className="text-lg font-semibold text-slate-900">
+              {ot > 0 ? formatMinutes(ot) : '—'}
+            </dd>
+          </div>
+          <div className="rounded-md border border-slate-200 bg-white p-3">
+            <dt className="text-xs text-slate-500">Flags</dt>
+            <dd className="mt-1 flex flex-wrap gap-1">
+              {summary.is_late && <Badge tone="amber">Late</Badge>}
+              {ot > 0 && <Badge tone="blue">OT</Badge>}
+              {!summary.is_late && ot === 0 && <span className="text-sm text-slate-500">—</span>}
+            </dd>
+          </div>
+        </dl>
+        <p className="text-xs text-slate-500">
+          This is your attendance for today based on your punches. See the full day on My
+          Attendance.
+        </p>
+        <div className="flex justify-end">
+          <Button data-testid="punchout-summary-close" onClick={onClose}>
+            OK
+          </Button>
+        </div>
+      </div>
+    </Modal>
   )
 }

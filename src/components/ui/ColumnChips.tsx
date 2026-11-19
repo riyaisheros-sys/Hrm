@@ -74,7 +74,7 @@ export function ColumnChips({
           return (
             <div
               key={c.id}
-              className="flex items-center gap-1.5"
+              className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2.5 py-1"
               data-testid={`${testid}-item-${c.id}`}
             >
               <input
@@ -99,13 +99,13 @@ export function ColumnChips({
               >
                 {c.label}
               </label>
-              <div className="ml-0.5 inline-flex rounded border border-slate-200 bg-white">
+              <div className="ml-0.5 inline-flex overflow-hidden rounded border border-slate-200 bg-white">
                 <button
                   type="button"
                   aria-label={`Move ${c.label} left`}
                   disabled={i === 0}
                   onClick={() => config.move(c.id, -1)}
-                  className="rounded-l px-1 text-slate-500 enabled:hover:bg-slate-100 enabled:hover:text-slate-800 disabled:opacity-30"
+                  className="px-0.5 text-slate-400 enabled:hover:bg-slate-100 enabled:hover:text-slate-700 disabled:opacity-25"
                   title="Move left"
                   data-testid={`${testid}-up-${c.id}`}
                 >
@@ -116,7 +116,7 @@ export function ColumnChips({
                   aria-label={`Move ${c.label} right`}
                   disabled={i === ordered.length - 1}
                   onClick={() => config.move(c.id, 1)}
-                  className="rounded-r border-l border-slate-200 px-1 text-slate-500 enabled:hover:bg-slate-100 enabled:hover:text-slate-800 disabled:opacity-30"
+                  className="border-l border-slate-200 px-0.5 text-slate-400 enabled:hover:bg-slate-100 enabled:hover:text-slate-700 disabled:opacity-25"
                   title="Move right"
                   data-testid={`${testid}-down-${c.id}`}
                 >
@@ -158,11 +158,11 @@ function SwatchPicker({
         data-testid={testid}
         aria-label="Heading colour"
         onClick={() => setOpen((v) => !v)}
-        className="size-3.5 rounded-sm border border-slate-300"
+        className="size-2.5 rounded-full border border-slate-300 shadow-sm"
         style={{
-          background: value || 'linear-gradient(135deg, #fff 50%, #e2e8f0 50%)',
+          background: value || '#cbd5e1', // slate-300 so default looks like a neutral dot, not another checkbox
         }}
-        title={value ? `Colour: ${value}` : 'Default colour'}
+        title={value ? `Heading colour: ${value}` : 'Pick heading colour'}
       />
       {open && (
         <div
@@ -179,12 +179,10 @@ function SwatchPicker({
                 setOpen(false)
               }}
               className={cn(
-                'size-5 rounded-sm border border-slate-300',
+                'size-5 rounded-full border border-slate-300',
                 value === hex && 'ring-brand-500 ring-2 ring-offset-1',
               )}
-              style={{
-                background: hex || 'linear-gradient(135deg, #fff 50%, #e2e8f0 50%)',
-              }}
+              style={{ background: hex || '#cbd5e1' }}
               title={hex || 'Default'}
             />
           ))}
