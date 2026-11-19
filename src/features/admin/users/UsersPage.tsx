@@ -21,6 +21,7 @@ import { useDepartments, useTeams } from '@/features/admin/hierarchy/hooks'
 import { useProfile } from '@/features/rbac/profile-context'
 import { useToast } from '@/components/ui/toast-context'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { StickyHeader } from '@/components/ui/StickyHeader'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
@@ -64,25 +65,27 @@ export function UsersPage() {
 
   return (
     <div data-testid="users-page">
-      <PageHeader
-        title="Users"
-        description="View users, assign roles, departments, teams and reporting managers."
-        actions={
-          canManage && (
-            <Button data-testid="add-employee-button" onClick={() => setAdding(true)}>
-              <Plus className="size-4" /> Add employee
-            </Button>
-          )
-        }
-      />
+      <StickyHeader testid="users-sticky-header">
+        <PageHeader
+          title="Users"
+          description="View users, assign roles, departments, teams and reporting managers."
+          actions={
+            canManage && (
+              <Button data-testid="add-employee-button" onClick={() => setAdding(true)}>
+                <Plus className="size-4" /> Add employee
+              </Button>
+            )
+          }
+        />
+        <ColumnChips
+          config={colConfig}
+          title="Display headings"
+          testid="users-chips"
+          className="mb-0"
+        />
+      </StickyHeader>
 
-      <ColumnChips
-        config={colConfig}
-        title="Display headings"
-        testid="users-chips"
-        className="mb-3"
-      />
-
+      <div className="pt-4">
       <Table data-testid="users-table">
         <Thead>
           <tr>
@@ -207,6 +210,7 @@ export function UsersPage() {
         </Tbody>
       </Table>
       <Pagination {...pagination} testid="users-pagination" />
+      </div>
 
       {editing && (
         <EditUserModal user={editing} onClose={() => setEditing(null)} allUsers={users} />

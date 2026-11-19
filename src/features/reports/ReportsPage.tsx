@@ -9,6 +9,7 @@ import { useTaskCategories } from '@/features/tasks/hooks'
 import { ColumnChips } from '@/components/ui/ColumnChips'
 import { useColumnConfig } from '@/lib/useColumnConfig'
 import { usePersistedState } from '@/lib/usePersistedState'
+import { StickyHeader } from '@/components/ui/StickyHeader'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -55,6 +56,12 @@ export function ReportsPage() {
   const [status, setStatus] = usePersistedState('hrms-reports:status', '')
   const [category, setCategory] = usePersistedState('hrms-reports:category', '')
   const [priority, setPriority] = usePersistedState('hrms-reports:priority', '')
+  const [taskType, setTaskType] = usePersistedState('hrms-reports:taskType', '')
+  const [taskSearch, setTaskSearch] = usePersistedState('hrms-reports:taskSearch', '')
+  const [sort, setSort] = usePersistedState<{ key: string; dir: 'asc' | 'desc' } | null>(
+    'hrms-reports:sort',
+    null,
+  )
   const { data: users = [] } = useUsers()
   const { data: taskCategories = [] } = useTaskCategories()
   const { data, isLoading } = useReport(type, {
@@ -64,6 +71,8 @@ export function ReportsPage() {
     status: status || undefined,
     category: category || undefined,
     priority: priority || undefined,
+    taskType: taskType || undefined,
+    taskSearch: taskSearch || undefined,
   })
   const { data: allowedFields = new Map<string, boolean>() } = useAllowedReportFields(type)
   const catalogColumns = useMemo(
@@ -81,10 +90,32 @@ export function ReportsPage() {
         .filter((c): c is NonNullable<typeof c> => !!c),
     [colConfig.visible, data?.columns],
   )
-  const hasFilters = !!(from || to || userId || status || category || priority)
+  const hasFilters = !!(from || to || userId || status || category || priority || taskType || taskSearch)
+
+  const sortedRows = useMemo(() => {
+    const rows = data?.rows ?? []
+    if (!sort) return rows
+    const { key, dir } = sort
+    const factor = dir === 'asc' ? 1 : -1
+    return [...rows].sort((a, b) => {
+      const av = a[key]
+      const bv = b[key]
+      if (av == null && bv == null) return 0
+      if (av == null) return 1 * factor
+      if (bv == null) return -1 * factor
+      // Try numeric compare; fall back to string.
+      const an = Number(av)
+      const bn = Number(bv)
+      if (!Number.isNaN(an) && !Number.isNaN(bn) && String(av).trim() !== '' && String(bv).trim() !== '') {
+        return (an - bn) * factor
+      }
+      return String(av).localeCompare(String(bv)) * factor
+    })
+  }, [data?.rows, sort])
 
   return (
     <div data-testid="reports-page">
+      <StickyHeader testid="reports-sticky-header">
       <PageHeader
         title="Reports"
         description="Reports across every module — export any of them to Excel or PDF."
@@ -94,7 +125,7 @@ export function ReportsPage() {
               <Button
                 variant="outline"
                 data-testid="export-excel"
-                onClick={() => exportExcel(data.filename, visibleColumns, data.rows)}
+                onClick={() => exportExcel(data.filename, visibleColumns, sortedRows)}
               >
                 <FileSpreadsheet className="size-4" /> Excel
               </Button>
@@ -106,7 +137,7 @@ export function ReportsPage() {
                     data.title,
                     data.filename,
                     visibleColumns,
-                    data.rows,
+                    sortedRows,
                     type === 'attendance' ? attendanceFill : undefined,
                   )
                 }
@@ -243,6 +274,35 @@ export function ReportsPage() {
                 <option value="high">High</option>
               </Select>
             </div>
+            <div>
+              <Label htmlFor="report-task-type" className="text-xs text-slate-500">
+                Task type
+              </Label>
+              <Select
+                id="report-task-type"
+                data-testid="report-task-type"
+                value={taskType}
+                onChange={(event) => setTaskType(event.target.value)}
+                className="w-40"
+              >
+                <option value="">All types</option>
+                <option value="self">Self (normal)</option>
+                <option value="assigned">Assigned (admin)</option>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="report-task-search" className="text-xs text-slate-500">
+                Task title
+              </Label>
+              <Input
+                id="report-task-search"
+                data-testid="report-task-search"
+                value={taskSearch}
+                onChange={(event) => setTaskSearch(event.target.value)}
+                placeholder="Search task title"
+                className="w-48"
+              />
+            </div>
           </>
         )}
         {type === 'helpdesk' && (
@@ -337,6 +397,8 @@ export function ReportsPage() {
               setStatus('')
               setCategory('')
               setPriority('')
+              setTaskType('')
+              setTaskSearch('')
             }}
           >
             <X className="size-4" /> Clear
@@ -345,7 +407,7 @@ export function ReportsPage() {
       </div>
 
       {type === 'attendance' && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5" data-testid="report-legend">
+        <div className="mb-0 flex flex-wrap items-center gap-1.5" data-testid="report-legend">
           {LEGEND.map((m) => (
             <span
               key={m.label}
@@ -356,7 +418,9 @@ export function ReportsPage() {
           ))}
         </div>
       )}
+      </StickyHeader>
 
+      <div className="pt-4">
       {isLoading || !data ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : data.rows.length === 0 ? (
@@ -367,23 +431,42 @@ export function ReportsPage() {
             className="mb-2 text-sm font-medium text-slate-600"
             data-testid="report-total-records"
           >
-            Total Records: {data.rows.length}
+            Total Records: {sortedRows.length}
           </div>
           <Table data-testid="report-table">
             <Thead>
               <tr>
                 {visibleColumns.map((c) => {
                   const color = colConfig.colorOf(c.key)
+                  const active = sort?.key === c.key
+                  const dir = active ? sort!.dir : null
                   return (
                     <Th key={c.key} style={color ? { color } : undefined}>
-                      {c.label}
+                      <button
+                        type="button"
+                        data-testid={`report-sort-${c.key}`}
+                        onClick={() =>
+                          setSort(
+                            active && dir === 'asc'
+                              ? { key: c.key, dir: 'desc' }
+                              : active && dir === 'desc'
+                                ? null
+                                : { key: c.key, dir: 'asc' },
+                          )
+                        }
+                        className="inline-flex items-center gap-1 hover:text-slate-900"
+                      >
+                        {c.label}
+                        {dir === 'asc' && <span className="text-[10px]">▲</span>}
+                        {dir === 'desc' && <span className="text-[10px]">▼</span>}
+                      </button>
                     </Th>
                   )
                 })}
               </tr>
             </Thead>
             <Tbody>
-              {data.rows.map((row, i) => (
+              {sortedRows.map((row, i) => (
                 <tr
                   key={i}
                   data-testid="report-row"
@@ -410,6 +493,7 @@ export function ReportsPage() {
           </Table>
         </>
       )}
+      </div>
     </div>
   )
 }

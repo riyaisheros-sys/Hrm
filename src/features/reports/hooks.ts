@@ -32,6 +32,10 @@ export interface ReportFilters {
   status?: string
   category?: string
   priority?: string
+  /** 'self' | 'assigned' — task report filter. */
+  taskType?: string
+  /** Case-insensitive title search — task report. */
+  taskSearch?: string
 }
 
 export interface ReportData {
@@ -315,6 +319,8 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     if (f.to) q = q.lte('created_at', `${f.to}T23:59:59`)
     if (f.category) q = q.eq('category_id', f.category)
     if (f.priority) q = q.eq('priority', f.priority)
+    if (f.taskType) q = q.eq('task_type', f.taskType)
+    if (f.taskSearch) q = q.ilike('title', `%${f.taskSearch}%`)
     // Status filter targets the task_statuses.slug via FK join.
     if (f.status) {
       const { data: s } = await supabase

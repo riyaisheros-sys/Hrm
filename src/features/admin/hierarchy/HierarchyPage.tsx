@@ -25,6 +25,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Card, CardBody } from '@/components/ui/Card'
 import { ColumnChips } from '@/components/ui/ColumnChips'
 import { useColumnConfig } from '@/lib/useColumnConfig'
+import { StickyHeader } from '@/components/ui/StickyHeader'
 import { cn } from '@/lib/cn'
 
 export function HierarchyPage() {
@@ -163,6 +164,7 @@ export function HierarchyPage() {
 
   return (
     <div data-testid="hierarchy-page">
+      <StickyHeader testid="hierarchy-sticky-header">
       <PageHeader
         title="Departments & Teams"
         description="Structure your organisation. Assign reporting managers to teams."
@@ -314,7 +316,9 @@ export function HierarchyPage() {
           </Button>
         )}
       </div>
+      </StickyHeader>
 
+      <div className="pt-4">
       {filteredRows.length === 0 ? (
         <EmptyState
           title={hasFilters ? 'No matches' : 'No departments or teams yet'}
@@ -495,6 +499,7 @@ export function HierarchyPage() {
           </Tbody>
         </Table>
       )}
+      </div>
 
       <DepartmentModal open={deptModal} onClose={() => setDeptModal(false)} companies={companies} />
       <TeamModal open={teamModal} onClose={() => setTeamModal(false)} departments={departments} />
