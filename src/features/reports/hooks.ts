@@ -146,6 +146,35 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     if (f.userId) q = q.eq('user_id', f.userId)
     if (f.from) q = q.gte('work_date', f.from)
     if (f.to) q = q.lte('work_date', f.to)
+    // "Status" in the attendance report filters one of the real attendance
+    // statuses OR the flag-style pseudo-statuses (late, overtime,
+    // missed_punch_out, corrected). Previously ignored — always returned the
+    // same rows for every choice.
+    if (f.status) {
+      switch (f.status) {
+        case 'present':
+          q = q.in('status', ['present', 'full_day'])
+          break
+        case 'full_day':
+        case 'half_day':
+        case 'quarter_day':
+        case 'absent':
+          q = q.eq('status', f.status)
+          break
+        case 'late':
+          q = q.eq('is_late', true)
+          break
+        case 'overtime':
+          q = q.gt('overtime_minutes', 0)
+          break
+        case 'missed_punch_out':
+          q = q.eq('missed_punch_out', true)
+          break
+        case 'corrected':
+          q = q.eq('is_manual', true)
+          break
+      }
+    }
     const { data, error } = await q.order('work_date', { ascending: false }).limit(1000)
     if (error) throw error
     const list = (data ?? []) as unknown as AttRow[]

@@ -154,6 +154,31 @@ export function ReportsPage() {
             className="w-40"
           />
         </div>
+        {type === 'attendance' && (
+          <div>
+            <Label htmlFor="report-attendance-status" className="text-xs text-slate-500">
+              Status
+            </Label>
+            <Select
+              id="report-attendance-status"
+              data-testid="report-attendance-status"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              className="w-44"
+            >
+              <option value="">All statuses</option>
+              <option value="present">Present (full_day)</option>
+              <option value="full_day">Full day</option>
+              <option value="half_day">Half day</option>
+              <option value="quarter_day">Quarter day</option>
+              <option value="absent">Absent</option>
+              <option value="late">Late arrivals</option>
+              <option value="overtime">With overtime</option>
+              <option value="missed_punch_out">Missed punch-out</option>
+              <option value="corrected">Manually corrected</option>
+            </Select>
+          </div>
+        )}
         {type === 'task' && (
           <div>
             <Label htmlFor="report-task-group" className="text-xs text-slate-500">
