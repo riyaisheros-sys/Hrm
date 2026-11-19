@@ -74,7 +74,7 @@ export function ColumnChips({
           return (
             <div
               key={c.id}
-              className="group flex items-center gap-1.5"
+              className="flex items-center gap-1.5"
               data-testid={`${testid}-item-${c.id}`}
             >
               <input
@@ -99,24 +99,30 @@ export function ColumnChips({
               >
                 {c.label}
               </label>
-              <button
-                type="button"
-                aria-label={`Move ${c.label} up`}
-                disabled={i === 0}
-                onClick={() => config.move(c.id, -1)}
-                className="rounded text-slate-300 opacity-0 enabled:hover:text-slate-700 group-hover:opacity-100 disabled:opacity-20"
-              >
-                <ArrowUp className="size-3" />
-              </button>
-              <button
-                type="button"
-                aria-label={`Move ${c.label} down`}
-                disabled={i === ordered.length - 1}
-                onClick={() => config.move(c.id, 1)}
-                className="rounded text-slate-300 opacity-0 enabled:hover:text-slate-700 group-hover:opacity-100 disabled:opacity-20"
-              >
-                <ArrowDown className="size-3" />
-              </button>
+              <div className="ml-0.5 inline-flex rounded border border-slate-200 bg-white">
+                <button
+                  type="button"
+                  aria-label={`Move ${c.label} left`}
+                  disabled={i === 0}
+                  onClick={() => config.move(c.id, -1)}
+                  className="rounded-l px-1 text-slate-500 enabled:hover:bg-slate-100 enabled:hover:text-slate-800 disabled:opacity-30"
+                  title="Move left"
+                  data-testid={`${testid}-up-${c.id}`}
+                >
+                  <ArrowUp className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Move ${c.label} right`}
+                  disabled={i === ordered.length - 1}
+                  onClick={() => config.move(c.id, 1)}
+                  className="rounded-r border-l border-slate-200 px-1 text-slate-500 enabled:hover:bg-slate-100 enabled:hover:text-slate-800 disabled:opacity-30"
+                  title="Move right"
+                  data-testid={`${testid}-down-${c.id}`}
+                >
+                  <ArrowDown className="size-3" />
+                </button>
+              </div>
             </div>
           )
         })}
