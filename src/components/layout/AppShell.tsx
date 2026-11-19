@@ -40,7 +40,7 @@ import { useViewMode } from '@/features/view-mode/view-mode-context'
 import { HealthBadge } from '@/features/health/HealthBadge'
 import { SidebarCustomizer } from './SidebarCustomizer'
 import { useSidebarPreferences } from './sidebar-preferences'
-import { groupForNav } from './sidebar-groups'
+import { groupForNav, sidebarGroupsFor } from './sidebar-groups'
 import { useEmployeeSidebarPolicy } from '@/features/admin/employee-panel/hooks'
 import { NotificationsBell } from '@/features/notifications/NotificationsBell'
 import { useToast } from '@/components/ui/toast-context'
@@ -309,29 +309,45 @@ export function AppShell({ children }: { children: ReactNode }) {
             HRMS
           </span>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto p-3" data-testid={`nav-${mode}`}>
-          {items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              data-testid={item.testid}
-              onClick={() => setMobileOpen(false)}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  preferences.collapsed && 'lg:justify-center lg:px-2',
-                  isActive
-                    ? 'bg-brand-50 text-brand-700'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                )
-              }
-            >
-              <item.icon className="size-5 shrink-0" />
-              <span className={cn(preferences.collapsed && 'lg:hidden')}>{item.label}</span>
-              {preferences.collapsed && <span className="sr-only">{item.label}</span>}
-            </NavLink>
-          ))}
+        <nav className="flex-1 space-y-3 overflow-y-auto p-3" data-testid={`nav-${mode}`}>
+          {sidebarGroupsFor(mode).map((group) => {
+            const groupItems = items.filter(
+              (item) => groupForNav(mode, item.testid) === group.id,
+            )
+            if (groupItems.length === 0) return null
+            const showHeader = group.id !== 'home' && !preferences.collapsed
+            return (
+              <div key={group.id} data-testid={`nav-group-${group.id}`} className="space-y-1">
+                {showHeader && (
+                  <h3 className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    {group.label}
+                  </h3>
+                )}
+                {groupItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === '/'}
+                    data-testid={item.testid}
+                    onClick={() => setMobileOpen(false)}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                        preferences.collapsed && 'lg:justify-center lg:px-2',
+                        isActive
+                          ? 'bg-brand-50 text-brand-700'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                      )
+                    }
+                  >
+                    <item.icon className="size-5 shrink-0" />
+                    <span className={cn(preferences.collapsed && 'lg:hidden')}>{item.label}</span>
+                    {preferences.collapsed && <span className="sr-only">{item.label}</span>}
+                  </NavLink>
+                ))}
+              </div>
+            )
+          })}
         </nav>
         <div className="border-t border-slate-200 p-3">
           <button
