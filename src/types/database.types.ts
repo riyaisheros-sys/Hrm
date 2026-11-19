@@ -1492,6 +1492,42 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          id: string
+          user_id: string
+          kind: string
+          title: string
+          body: string | null
+          link: string | null
+          payload: Record<string, unknown> | null
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          kind: string
+          title: string
+          body?: string | null
+          link?: string | null
+          payload?: Record<string, unknown> | null
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          kind?: string
+          title?: string
+          body?: string | null
+          link?: string | null
+          payload?: Record<string, unknown> | null
+          read_at?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
       master_audit_log: {
         Row: {
           action: string
@@ -2218,6 +2254,8 @@ export type Database = {
           task_capacity: number | null
           kra: string | null
           kpi: string | null
+          kra_value: number | null
+          kpi_value: number | null
         }
         Insert: {
           avatar_url?: string | null
@@ -2235,6 +2273,8 @@ export type Database = {
           task_capacity?: number | null
           kra?: string | null
           kpi?: string | null
+          kra_value?: number | null
+          kpi_value?: number | null
         }
         Update: {
           avatar_url?: string | null
@@ -2252,6 +2292,8 @@ export type Database = {
           task_capacity?: number | null
           kra?: string | null
           kpi?: string | null
+          kra_value?: number | null
+          kpi_value?: number | null
         }
         Relationships: [
           {

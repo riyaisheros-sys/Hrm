@@ -34,6 +34,8 @@ export interface ProfileUpdate {
   task_capacity?: number | null
   kra?: string | null
   kpi?: string | null
+  kra_value?: number | null
+  kpi_value?: number | null
 }
 
 export async function uploadProfilePicture(userId: string, file: File) {
@@ -78,6 +80,8 @@ export interface NewEmployee {
   leaveQuotas?: LeaveQuotaInput[]
   kra?: string | null
   kpi?: string | null
+  kra_value?: number | null
+  kpi_value?: number | null
 }
 
 export function useCreateEmployee() {

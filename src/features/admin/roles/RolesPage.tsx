@@ -84,7 +84,7 @@ export function RolesPage() {
   return (
     <div data-testid="roles-page">
       <PageHeader
-        title="Roles & Permissions"
+        title="Organization Roles & Permissions"
         description="Create unlimited permission-based roles. Assign capabilities per role."
         actions={
           canManage && (

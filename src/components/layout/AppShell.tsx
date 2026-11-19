@@ -43,6 +43,7 @@ import { SidebarCustomizer } from './SidebarCustomizer'
 import { useSidebarPreferences } from './sidebar-preferences'
 import { groupForNav, sidebarGroupsFor } from './sidebar-groups'
 import { useEmployeeSidebarPolicy } from '@/features/admin/employee-panel/hooks'
+import { NotificationsBell } from '@/features/notifications/NotificationsBell'
 import { useToast } from '@/components/ui/toast-context'
 import { cn } from '@/lib/cn'
 
@@ -178,7 +179,7 @@ const adminNav: NavItem[] = [
     perm: 'monitoring.view',
   },
   { to: '/admin/users', label: 'Users', icon: Users, testid: 'nav-users', perm: 'users.view' },
-  { to: '/admin/roles', label: 'Roles', icon: Shield, testid: 'nav-roles', perm: 'roles.view' },
+  { to: '/admin/roles', label: 'Organization Roles', icon: Shield, testid: 'nav-roles', perm: 'roles.view' },
   {
     to: '/admin/hierarchy',
     label: 'Departments & Teams',
@@ -445,6 +446,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="sr-only" data-testid="active-view-mode">
             {mode}
           </span>
+          <NotificationsBell />
           <HealthBadge />
           {profile?.avatar_url && (
             <img

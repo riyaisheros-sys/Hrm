@@ -176,12 +176,20 @@ export function TasksPage() {
   const pageEnd = Math.min(pageStart + PAGE_SIZE, displayItems.length)
   const pagedItems = displayItems.slice(pageStart, pageEnd)
 
-  function renderTaskRow(t: TaskRow, isChild: boolean) {
+  function renderTaskRow(t: TaskRow, isChild: boolean, serial: number | null) {
     return (
       <tr key={t.id} data-testid="task-row" data-child={isChild ? 'true' : undefined}>
         <Td
           className={cn(
-            'sticky left-0 z-10 bg-white font-medium text-slate-900',
+            'sticky left-0 z-10 w-10 bg-white text-xs text-slate-400 tabular-nums',
+            isChild && 'bg-slate-50',
+          )}
+        >
+          {serial ?? ''}
+        </Td>
+        <Td
+          className={cn(
+            'sticky left-10 z-10 bg-white font-medium text-slate-900',
             isChild && 'bg-slate-50 pl-10',
           )}
         >
@@ -464,7 +472,8 @@ export function TasksPage() {
         <Table data-testid="tasks-table">
           <Thead>
             <tr>
-              <Th className="sticky left-0 z-20 bg-slate-50">Task</Th>
+              <Th className="sticky left-0 z-20 w-10 bg-slate-50">S.No</Th>
+              <Th className="sticky left-10 z-20 bg-slate-50">Task</Th>
               <Th>Assignee</Th>
               <Th>Created by</Th>
               <Th>Created</Th>
@@ -476,9 +485,10 @@ export function TasksPage() {
             </tr>
           </Thead>
           <Tbody>
-            {pagedItems.flatMap((item) => {
+            {pagedItems.flatMap((item, idx) => {
+              const serial = pageStart + idx + 1
               if (item.kind === 'single') {
-                return [renderTaskRow(item.task, false)]
+                return [renderTaskRow(item.task, false, serial)]
               }
               const expanded = expandedBulks.has(item.key)
               const first = item.tasks[0]
@@ -496,8 +506,11 @@ export function TasksPage() {
                   data-bulk-key={item.key}
                   className="bg-slate-50"
                 >
+                  <Td className="sticky left-0 z-10 w-10 bg-slate-50 text-xs text-slate-500 tabular-nums">
+                    {serial}
+                  </Td>
                   <Td
-                    className="sticky left-0 z-10 bg-slate-50 font-medium text-slate-900"
+                    className="sticky left-10 z-10 bg-slate-50 font-medium text-slate-900"
                     colSpan={2}
                   >
                     <button
@@ -573,7 +586,7 @@ export function TasksPage() {
                     </div>
                   </Td>
                 </tr>,
-                ...(expanded ? item.tasks.map((t) => renderTaskRow(t, true)) : []),
+                ...(expanded ? item.tasks.map((t) => renderTaskRow(t, true, null)) : []),
               ]
             })}
           </Tbody>

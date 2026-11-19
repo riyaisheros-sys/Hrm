@@ -28,7 +28,6 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Checkbox } from '@/components/ui/Checkbox'
-import { Textarea } from '@/components/ui/Textarea'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 
 export function UsersPage() {
@@ -64,6 +63,7 @@ export function UsersPage() {
       <Table data-testid="users-table">
         <Thead>
           <tr>
+            <Th className="w-10">S.No</Th>
             <Th>Name</Th>
             <Th>Code</Th>
             <Th>Department</Th>
@@ -77,11 +77,12 @@ export function UsersPage() {
         <Tbody>
           {isLoading && (
             <tr>
-              <Td colSpan={8}>Loading…</Td>
+              <Td colSpan={9}>Loading…</Td>
             </tr>
           )}
-          {users.map((u) => (
+          {users.map((u, i) => (
             <tr key={u.id} data-testid={`user-row-${u.email}`}>
+              <Td className="w-10 text-xs text-slate-400 tabular-nums">{i + 1}</Td>
               <Td className="font-medium text-slate-900">
                 <div className="flex items-center gap-2">
                   {u.avatar_url ? (
@@ -290,8 +291,12 @@ function EditUserModal({
   const [taskCapacity, setTaskCapacity] = useState(
     user.task_capacity != null ? String(user.task_capacity) : '',
   )
-  const [kra, setKra] = useState(user.kra ?? '')
-  const [kpi, setKpi] = useState(user.kpi ?? '')
+  const [kraValue, setKraValue] = useState(
+    user.kra_value != null ? String(user.kra_value) : '',
+  )
+  const [kpiValue, setKpiValue] = useState(
+    user.kpi_value != null ? String(user.kpi_value) : '',
+  )
 
   const saving =
     updateProfile.isPending ||
@@ -309,8 +314,8 @@ function EditUserModal({
         reporting_manager_id: managerId || null,
         status,
         task_capacity: taskCapacity.trim() ? Math.max(1, Math.round(Number(taskCapacity))) : null,
-        kra: kra.trim() || null,
-        kpi: kpi.trim() || null,
+        kra_value: kraValue.trim() ? Number(kraValue) : null,
+        kpi_value: kpiValue.trim() ? Number(kpiValue) : null,
       })
       await setUserRoles.mutateAsync({ userId: user.id, roleIds: [...roleIds] })
       if (Object.keys(quotaOverrides).length > 0) {
@@ -484,26 +489,34 @@ function EditUserModal({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <Label htmlFor="user-kra">KRA — Key Result Areas</Label>
-            <Textarea
+            <Label htmlFor="user-kra">KRA target (number)</Label>
+            <Input
               id="user-kra"
               data-testid="user-kra-input"
-              rows={3}
-              placeholder="What this role is accountable for"
-              value={kra}
-              onChange={(e) => setKra(e.target.value)}
+              type="number"
+              inputMode="decimal"
+              placeholder="e.g. 20"
+              value={kraValue}
+              onChange={(e) => setKraValue(e.target.value)}
             />
+            <p className="mt-1 text-xs text-slate-400">
+              Numeric target (Key Result Area).
+            </p>
           </div>
           <div>
-            <Label htmlFor="user-kpi">KPI — Key Performance Indicators</Label>
-            <Textarea
+            <Label htmlFor="user-kpi">KPI target (number)</Label>
+            <Input
               id="user-kpi"
               data-testid="user-kpi-input"
-              rows={3}
-              placeholder="How performance is measured"
-              value={kpi}
-              onChange={(e) => setKpi(e.target.value)}
+              type="number"
+              inputMode="decimal"
+              placeholder="e.g. 85"
+              value={kpiValue}
+              onChange={(e) => setKpiValue(e.target.value)}
             />
+            <p className="mt-1 text-xs text-slate-400">
+              Numeric target (Key Performance Indicator).
+            </p>
           </div>
         </div>
 
@@ -580,8 +593,8 @@ function AddEmployeeModal({ onClose, allUsers }: { onClose: () => void; allUsers
   const [managerId, setManagerId] = useState('')
   const [roleIds, setRoleIds] = useState<Set<string>>(new Set())
   const [quotaOverrides, setQuotaOverrides] = useState<Record<string, string>>({})
-  const [kra, setKra] = useState('')
-  const [kpi, setKpi] = useState('')
+  const [kraValue, setKraValue] = useState('')
+  const [kpiValue, setKpiValue] = useState('')
   const pictureRef = useRef<HTMLInputElement>(null)
   const quotaBaseline = (t: LeaveType) => Number(t.default_annual_quota)
 
@@ -605,8 +618,8 @@ function AddEmployeeModal({ onClose, allUsers }: { onClose: () => void; allUsers
                 leaveTypeId: t.id,
                 allocated: Number(quotaOverrides[t.id] ?? quotaBaseline(t)) || 0,
               })),
-              kra: kra.trim() || null,
-              kpi: kpi.trim() || null,
+              kra_value: kraValue.trim() ? Number(kraValue) : null,
+              kpi_value: kpiValue.trim() ? Number(kpiValue) : null,
             },
             {
               onSuccess: async (created) => {
@@ -745,25 +758,27 @@ function AddEmployeeModal({ onClose, allUsers }: { onClose: () => void; allUsers
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <Label htmlFor="ne-kra">KRA — Key Result Areas</Label>
-            <Textarea
+            <Label htmlFor="ne-kra">KRA target (number)</Label>
+            <Input
               id="ne-kra"
               data-testid="new-emp-kra"
-              rows={3}
-              placeholder="What this role is accountable for"
-              value={kra}
-              onChange={(e) => setKra(e.target.value)}
+              type="number"
+              inputMode="decimal"
+              placeholder="e.g. 20"
+              value={kraValue}
+              onChange={(e) => setKraValue(e.target.value)}
             />
           </div>
           <div>
-            <Label htmlFor="ne-kpi">KPI — Key Performance Indicators</Label>
-            <Textarea
+            <Label htmlFor="ne-kpi">KPI target (number)</Label>
+            <Input
               id="ne-kpi"
               data-testid="new-emp-kpi"
-              rows={3}
-              placeholder="How performance is measured"
-              value={kpi}
-              onChange={(e) => setKpi(e.target.value)}
+              type="number"
+              inputMode="decimal"
+              placeholder="e.g. 85"
+              value={kpiValue}
+              onChange={(e) => setKpiValue(e.target.value)}
             />
           </div>
         </div>
