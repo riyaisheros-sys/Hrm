@@ -157,23 +157,28 @@ export function AttendanceMonitorPage() {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5" data-testid="attendance-legend">
-          {LEGEND.map((m) => (
-            <span
-              key={m.label}
-              className={cn('rounded-full px-2 py-0.5 text-xs font-medium', m.className)}
-            >
-              {m.label}
-            </span>
-          ))}
-        </div>
       </div>
 
       {view === 'register' && (
-        <AttendanceRegister
-          today={today}
-          onCellClick={canEdit ? (userId, date) => setCorrection({ userId, date }) : undefined}
-        />
+        <>
+          <AttendanceRegister
+            today={today}
+            onCellClick={canEdit ? (userId, date) => setCorrection({ userId, date }) : undefined}
+          />
+          <div
+            className="mt-4 flex flex-wrap items-center gap-1.5"
+            data-testid="attendance-legend"
+          >
+            {LEGEND.map((m) => (
+              <span
+                key={m.label}
+                className={cn('rounded-full px-2 py-0.5 text-xs font-medium', m.className)}
+              >
+                {m.label}
+              </span>
+            ))}
+          </div>
+        </>
       )}
 
       {view === 'list' && (
