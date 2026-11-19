@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Pencil, Plus, Trash2, X } from 'lucide-react'
 import {
   useCompanies,
   useCreateDepartment,
@@ -23,6 +23,9 @@ import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Card, CardBody } from '@/components/ui/Card'
+import { ColumnConfigButton } from '@/components/ui/ColumnConfigButton'
+import { useColumnConfig } from '@/lib/useColumnConfig'
+import { cn } from '@/lib/cn'
 
 export function HierarchyPage() {
   const { hasPermission } = useProfile()
@@ -42,6 +45,121 @@ export function HierarchyPage() {
   const [teamModal, setTeamModal] = useState(false)
   const [companyName, setCompanyName] = useState('')
   const [editingCompanyId, setEditingCompanyId] = useState<string | undefined>()
+  const [deptFilter, setDeptFilter] = useState('')
+  const [managerFilter, setManagerFilter] = useState('')
+  const [search, setSearch] = useState('')
+
+  const nameById = useMemo(
+    () => new Map(users.map((u) => [u.id, u.full_name || u.email])),
+    [users],
+  )
+  const emailById = useMemo(
+    () => new Map(users.map((u) => [u.id, u.email])),
+    [users],
+  )
+  const membersByTeam = useMemo(() => {
+    const map = new Map<string, typeof users>()
+    for (const u of users) {
+      if (!u.team_id) continue
+      const arr = map.get(u.team_id) ?? []
+      arr.push(u)
+      map.set(u.team_id, arr)
+    }
+    return map
+  }, [users])
+  const membersByDept = useMemo(() => {
+    const map = new Map<string, typeof users>()
+    for (const u of users) {
+      if (!u.department_id) continue
+      const arr = map.get(u.department_id) ?? []
+      arr.push(u)
+      map.set(u.department_id, arr)
+    }
+    return map
+  }, [users])
+
+  // All data denormalized to one row per (department, team) pair. A dept with
+  // no team still emits one row so admins can see empty departments.
+  type Row = {
+    deptId: string
+    deptName: string
+    company: string
+    teamId: string | null
+    teamName: string | null
+    managerId: string | null
+    members: typeof users
+    deptMembers: typeof users
+  }
+  const rows = useMemo<Row[]>(() => {
+    const out: Row[] = []
+    for (const d of departments) {
+      const deptMembers = membersByDept.get(d.id) ?? []
+      const deptTeams = teams.filter((t) => t.department_id === d.id)
+      if (deptTeams.length === 0) {
+        out.push({
+          deptId: d.id,
+          deptName: d.name,
+          company: d.company?.name ?? '—',
+          teamId: null,
+          teamName: null,
+          managerId: null,
+          members: [],
+          deptMembers,
+        })
+        continue
+      }
+      for (const t of deptTeams) {
+        out.push({
+          deptId: d.id,
+          deptName: d.name,
+          company: d.company?.name ?? '—',
+          teamId: t.id,
+          teamName: t.name,
+          managerId: t.reporting_manager_id ?? null,
+          members: membersByTeam.get(t.id) ?? [],
+          deptMembers,
+        })
+      }
+    }
+    return out
+  }, [departments, teams, membersByDept, membersByTeam])
+
+  const filteredRows = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return rows.filter((r) => {
+      if (deptFilter && r.deptId !== deptFilter) return false
+      if (managerFilter && r.managerId !== managerFilter) return false
+      if (q) {
+        const hay = [
+          r.deptName,
+          r.teamName ?? '',
+          r.company,
+          r.managerId ? (nameById.get(r.managerId) ?? '') : '',
+          ...r.members.map((m) => m.full_name || m.email),
+        ]
+          .join(' ')
+          .toLowerCase()
+        if (!hay.includes(q)) return false
+      }
+      return true
+    })
+  }, [rows, deptFilter, managerFilter, search, nameById])
+
+  const COLUMNS = useMemo(
+    () => [
+      { id: 'sno', label: 'S.No' },
+      { id: 'department', label: 'Department' },
+      { id: 'team', label: 'Team' },
+      { id: 'members', label: 'Members' },
+      { id: 'manager', label: 'Manager' },
+      { id: 'company', label: 'Company' },
+      { id: 'actions', label: 'Actions' },
+    ],
+    [],
+  )
+  const colConfig = useColumnConfig('hierarchy', COLUMNS)
+  const visibleIds = new Set(colConfig.visible.map((c) => c.id))
+  const hasFilters = !!(deptFilter || managerFilter || search)
 
   return (
     <div data-testid="hierarchy-page">
@@ -108,56 +226,250 @@ export function HierarchyPage() {
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
           Departments &amp; Teams
         </h2>
-        {canManage && (
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              data-testid="new-department-button"
-              onClick={() => setDeptModal(true)}
-            >
-              <Plus className="size-4" /> Department
-            </Button>
-            <Button size="sm" data-testid="new-team-button" onClick={() => setTeamModal(true)}>
-              <Plus className="size-4" /> Team
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <ColumnConfigButton config={colConfig} testid="hierarchy-columns" />
+          {canManage && (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                data-testid="new-department-button"
+                onClick={() => setDeptModal(true)}
+              >
+                <Plus className="size-4" /> Department
+              </Button>
+              <Button size="sm" data-testid="new-team-button" onClick={() => setTeamModal(true)}>
+                <Plus className="size-4" /> Team
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mb-3 flex flex-wrap items-end gap-3" data-testid="hierarchy-filters">
+        <div>
+          <Label htmlFor="hier-dept-filter" className="text-xs text-slate-500">
+            Department
+          </Label>
+          <Select
+            id="hier-dept-filter"
+            value={deptFilter}
+            onChange={(e) => setDeptFilter(e.target.value)}
+            className="w-48"
+          >
+            <option value="">All departments</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="hier-mgr-filter" className="text-xs text-slate-500">
+            Manager
+          </Label>
+          <Select
+            id="hier-mgr-filter"
+            value={managerFilter}
+            onChange={(e) => setManagerFilter(e.target.value)}
+            className="w-48"
+          >
+            <option value="">All managers</option>
+            {users.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.full_name || u.email}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="hier-search" className="text-xs text-slate-500">
+            Search
+          </Label>
+          <Input
+            id="hier-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Name, member, email…"
+            className="w-56"
+          />
+        </div>
+        {hasFilters && (
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="clear-hierarchy-filters"
+            onClick={() => {
+              setDeptFilter('')
+              setManagerFilter('')
+              setSearch('')
+            }}
+          >
+            <X className="size-4" /> Clear
+          </Button>
         )}
       </div>
 
-      {departments.length === 0 && teams.length === 0 ? (
-        <EmptyState title="No departments or teams yet" testid="hierarchy-empty" />
+      {filteredRows.length === 0 ? (
+        <EmptyState
+          title={hasFilters ? 'No matches' : 'No departments or teams yet'}
+          testid="hierarchy-empty"
+        />
       ) : (
         <Table data-testid="hierarchy-table">
           <Thead>
             <tr>
-              <Th className="w-10">S.No</Th>
-              <Th>Department</Th>
-              <Th>Team</Th>
-              <Th>Manager</Th>
-              <Th>Company</Th>
-              <Th className="w-20 text-right">Actions</Th>
+              {colConfig.visible.map((c) => (
+                <Th
+                  key={c.id}
+                  className={cn(
+                    c.id === 'sno' && 'w-10',
+                    c.id === 'actions' && 'w-20 text-right',
+                  )}
+                >
+                  {c.label}
+                </Th>
+              ))}
             </tr>
           </Thead>
           <Tbody>
-            {departments.flatMap((d, deptIdx) => {
-              const deptTeams = teams.filter((t) => t.department_id === d.id)
-              if (deptTeams.length === 0) {
-                return [
-                  <tr key={d.id} data-testid="department-row">
-                    <Td className="text-xs text-slate-400 tabular-nums">{deptIdx + 1}</Td>
-                    <Td className="font-medium text-slate-900">{d.name}</Td>
-                    <Td className="text-xs italic text-slate-400">No teams</Td>
-                    <Td>—</Td>
-                    <Td>{d.company?.name ?? '—'}</Td>
+            {filteredRows.map((r, i) => {
+              const firstOfDept =
+                i === 0 || filteredRows[i - 1].deptId !== r.deptId
+              const managerName = r.managerId ? (nameById.get(r.managerId) ?? '—') : '—'
+              const managerEmail = r.managerId ? (emailById.get(r.managerId) ?? '') : ''
+              return (
+                <tr
+                  key={`${r.deptId}-${r.teamId ?? 'none'}`}
+                  data-testid="hierarchy-row"
+                  data-dept={r.deptName}
+                  data-team={r.teamName ?? ''}
+                >
+                  {visibleIds.has('sno') && (
+                    <Td className="text-xs text-slate-400 tabular-nums">{i + 1}</Td>
+                  )}
+                  {visibleIds.has('department') && (
+                    <Td className={firstOfDept ? 'font-medium text-slate-900' : 'text-slate-300'}>
+                      {firstOfDept ? (
+                        <>
+                          {r.deptName}
+                          <div className="text-xs font-normal text-slate-400">
+                            {r.deptMembers.length} {r.deptMembers.length === 1 ? 'person' : 'people'} in dept
+                          </div>
+                        </>
+                      ) : (
+                        '↳'
+                      )}
+                    </Td>
+                  )}
+                  {visibleIds.has('team') && (
+                    <Td className="font-medium text-slate-800">
+                      {r.teamName ?? (
+                        <span className="text-xs italic text-slate-400">No teams</span>
+                      )}
+                    </Td>
+                  )}
+                  {visibleIds.has('members') && (
                     <Td>
-                      <div className="flex justify-end">
-                        {canManage && (
+                      {r.members.length === 0 ? (
+                        <span className="text-xs text-slate-400">—</span>
+                      ) : (
+                        <div className="flex max-w-56 flex-wrap gap-1">
+                          {r.members.slice(0, 3).map((m) => (
+                            <span
+                              key={m.id}
+                              title={m.email}
+                              className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-700"
+                            >
+                              {m.full_name || m.email}
+                            </span>
+                          ))}
+                          {r.members.length > 3 && (
+                            <span
+                              className="text-[11px] text-slate-500"
+                              title={r.members
+                                .slice(3)
+                                .map((m) => m.full_name || m.email)
+                                .join(', ')}
+                            >
+                              +{r.members.length - 3} more
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </Td>
+                  )}
+                  {visibleIds.has('manager') && (
+                    <Td>
+                      {r.teamId ? (
+                        canManage ? (
+                          <>
+                            <Select
+                              aria-label={`Manager for ${r.teamName}`}
+                              value={r.managerId ?? ''}
+                              onChange={(e) =>
+                                updateManager.mutate({
+                                  teamId: r.teamId!,
+                                  managerId: e.target.value || null,
+                                })
+                              }
+                              className="h-8 text-xs"
+                            >
+                              <option value="">— None —</option>
+                              {users.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                  {u.full_name || u.email}
+                                </option>
+                              ))}
+                            </Select>
+                            {r.managerId && (
+                              <div className="mt-0.5 text-[11px] text-slate-400">
+                                {managerEmail}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div>{managerName}</div>
+                            {managerEmail && (
+                              <div className="text-[11px] text-slate-400">{managerEmail}</div>
+                            )}
+                          </>
+                        )
+                      ) : (
+                        '—'
+                      )}
+                    </Td>
+                  )}
+                  {visibleIds.has('company') && (
+                    <Td className="text-slate-500">{firstOfDept ? r.company : ''}</Td>
+                  )}
+                  {visibleIds.has('actions') && (
+                    <Td>
+                      <div className="flex justify-end gap-1">
+                        {canManage && r.teamId && (
                           <button
-                            aria-label={`Delete ${d.name}`}
+                            aria-label={`Delete team ${r.teamName}`}
+                            title={`Delete team ${r.teamName}`}
                             className="text-slate-400 hover:text-red-600"
                             onClick={() =>
-                              delDept.mutate(d.id, {
+                              delTeam.mutate(r.teamId!, {
+                                onError: (e) =>
+                                  toast.error('Delete failed', (e as Error).message),
+                              })
+                            }
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        )}
+                        {canManage && firstOfDept && (
+                          <button
+                            aria-label={`Delete department ${r.deptName}`}
+                            title={`Delete department ${r.deptName}`}
+                            className="text-slate-300 hover:text-red-600"
+                            onClick={() =>
+                              delDept.mutate(r.deptId, {
                                 onError: (e) =>
                                   toast.error('Delete failed', (e as Error).message),
                               })
@@ -168,77 +480,9 @@ export function HierarchyPage() {
                         )}
                       </div>
                     </Td>
-                  </tr>,
-                ]
-              }
-              return deptTeams.map((t, i) => (
-                <tr key={t.id} data-testid="hierarchy-row" data-dept={d.name} data-team={t.name}>
-                  <Td className="text-xs text-slate-400 tabular-nums">
-                    {i === 0 ? `${deptIdx + 1}` : ''}
-                  </Td>
-                  <Td className={i === 0 ? 'font-medium text-slate-900' : 'text-slate-400'}>
-                    {i === 0 ? d.name : '↳'}
-                  </Td>
-                  <Td className="font-medium text-slate-800">{t.name}</Td>
-                  <Td>
-                    {canManage ? (
-                      <Select
-                        aria-label={`Manager for ${t.name}`}
-                        value={t.reporting_manager_id ?? ''}
-                        onChange={(e) =>
-                          updateManager.mutate({
-                            teamId: t.id,
-                            managerId: e.target.value || null,
-                          })
-                        }
-                        className="h-8 text-xs"
-                      >
-                        <option value="">— None —</option>
-                        {users.map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.full_name || u.email}
-                          </option>
-                        ))}
-                      </Select>
-                    ) : (
-                      (users.find((u) => u.id === t.reporting_manager_id)?.full_name ?? '—')
-                    )}
-                  </Td>
-                  <Td className="text-slate-500">{i === 0 ? (d.company?.name ?? '—') : ''}</Td>
-                  <Td>
-                    <div className="flex justify-end gap-1">
-                      {canManage && (
-                        <button
-                          aria-label={`Delete team ${t.name}`}
-                          title={`Delete team ${t.name}`}
-                          className="text-slate-400 hover:text-red-600"
-                          onClick={() =>
-                            delTeam.mutate(t.id, {
-                              onError: (e) => toast.error('Delete failed', (e as Error).message),
-                            })
-                          }
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      )}
-                      {canManage && i === 0 && (
-                        <button
-                          aria-label={`Delete department ${d.name}`}
-                          title={`Delete department ${d.name}`}
-                          className="text-slate-300 hover:text-red-600"
-                          onClick={() =>
-                            delDept.mutate(d.id, {
-                              onError: (e) => toast.error('Delete failed', (e as Error).message),
-                            })
-                          }
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      )}
-                    </div>
-                  </Td>
+                  )}
                 </tr>
-              ))
+              )
             })}
           </Tbody>
         </Table>

@@ -31,6 +31,8 @@ import { Checkbox } from '@/components/ui/Checkbox'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
+import { ColumnConfigButton } from '@/components/ui/ColumnConfigButton'
+import { useColumnConfig } from '@/lib/useColumnConfig'
 
 export function UsersPage() {
   const { hasPermission } = useProfile()
@@ -48,6 +50,17 @@ export function UsersPage() {
   const deptById = new Map(departments.map((d) => [d.id, d.name]))
   const teamById = new Map(teams.map((t) => [t.id, t.name]))
   const pagination = usePagination(users, 25)
+  const USER_COLS = [
+    { id: 'sno', label: 'S.No' },
+    { id: 'name', label: 'Name' },
+    { id: 'code', label: 'Code' },
+    { id: 'department', label: 'Department' },
+    { id: 'team', label: 'Team' },
+    { id: 'manager', label: 'Manager' },
+    { id: 'roles', label: 'Roles' },
+    { id: 'status', label: 'Status' },
+  ]
+  const colConfig = useColumnConfig('users', USER_COLS)
 
   return (
     <div data-testid="users-page">
@@ -55,72 +68,107 @@ export function UsersPage() {
         title="Users"
         description="View users, assign roles, departments, teams and reporting managers."
         actions={
-          canManage && (
-            <Button data-testid="add-employee-button" onClick={() => setAdding(true)}>
-              <Plus className="size-4" /> Add employee
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            <ColumnConfigButton config={colConfig} testid="users-columns" />
+            {canManage && (
+              <Button data-testid="add-employee-button" onClick={() => setAdding(true)}>
+                <Plus className="size-4" /> Add employee
+              </Button>
+            )}
+          </div>
         }
       />
 
       <Table data-testid="users-table">
         <Thead>
           <tr>
-            <Th className="w-10">S.No</Th>
-            <Th>Name</Th>
-            <Th>Code</Th>
-            <Th>Department</Th>
-            <Th>Team</Th>
-            <Th>Manager</Th>
-            <Th>Roles</Th>
-            <Th>Status</Th>
+            {colConfig.visible.map((c) => (
+              <Th key={c.id} className={c.id === 'sno' ? 'w-10' : undefined}>
+                {c.label}
+              </Th>
+            ))}
             {canManage && <Th className="w-10" />}
           </tr>
         </Thead>
         <Tbody>
           {isLoading && (
             <tr>
-              <Td colSpan={9}>Loading…</Td>
+              <Td colSpan={colConfig.visible.length + (canManage ? 1 : 0)}>Loading…</Td>
             </tr>
           )}
           {pagination.pagedItems.map((u, i) => (
             <tr key={u.id} data-testid={`user-row-${u.email}`}>
-              <Td className="w-10 text-xs text-slate-400 tabular-nums">
-                {pagination.pageStart + i + 1}
-              </Td>
-              <Td className="font-medium text-slate-900">
-                <div className="flex items-center gap-2">
-                  {u.avatar_url ? (
-                    <img src={u.avatar_url} alt="" className="size-8 rounded-full object-cover" />
-                  ) : (
-                    <span className="flex size-8 items-center justify-center rounded-full bg-slate-200 text-xs">
-                      {(u.full_name || u.email).slice(0, 1).toUpperCase()}
-                    </span>
-                  )}
-                  <span>{u.full_name || '—'}</span>
-                </div>
-                <div className="text-xs font-normal text-slate-500">{u.email}</div>
-              </Td>
-              <Td>{u.employee_code ?? '—'}</Td>
-              <Td>{u.department_id ? (deptById.get(u.department_id) ?? '—') : '—'}</Td>
-              <Td>{u.team_id ? (teamById.get(u.team_id) ?? '—') : '—'}</Td>
-              <Td>
-                {u.reporting_manager_id ? (nameById.get(u.reporting_manager_id) ?? '—') : '—'}
-              </Td>
-              <Td>
-                <div className="flex flex-wrap gap-1">
-                  {u.user_roles.map((ur) => (
-                    <Badge key={ur.role_id} tone="brand">
-                      {ur.roles?.name ?? ur.role_id}
-                    </Badge>
-                  ))}
-                </div>
-              </Td>
-              <Td>
-                <Badge tone={u.status === 'active' ? 'green' : 'slate'} data-testid="user-status">
-                  {u.status}
-                </Badge>
-              </Td>
+              {colConfig.visible.map((c) => {
+                switch (c.id) {
+                  case 'sno':
+                    return (
+                      <Td key={c.id} className="w-10 text-xs text-slate-400 tabular-nums">
+                        {pagination.pageStart + i + 1}
+                      </Td>
+                    )
+                  case 'name':
+                    return (
+                      <Td key={c.id} className="font-medium text-slate-900">
+                        <div className="flex items-center gap-2">
+                          {u.avatar_url ? (
+                            <img src={u.avatar_url} alt="" className="size-8 rounded-full object-cover" />
+                          ) : (
+                            <span className="flex size-8 items-center justify-center rounded-full bg-slate-200 text-xs">
+                              {(u.full_name || u.email).slice(0, 1).toUpperCase()}
+                            </span>
+                          )}
+                          <span>{u.full_name || '—'}</span>
+                        </div>
+                        <div className="text-xs font-normal text-slate-500">{u.email}</div>
+                      </Td>
+                    )
+                  case 'code':
+                    return <Td key={c.id}>{u.employee_code ?? '—'}</Td>
+                  case 'department':
+                    return (
+                      <Td key={c.id}>
+                        {u.department_id ? (deptById.get(u.department_id) ?? '—') : '—'}
+                      </Td>
+                    )
+                  case 'team':
+                    return (
+                      <Td key={c.id}>{u.team_id ? (teamById.get(u.team_id) ?? '—') : '—'}</Td>
+                    )
+                  case 'manager':
+                    return (
+                      <Td key={c.id}>
+                        {u.reporting_manager_id
+                          ? (nameById.get(u.reporting_manager_id) ?? '—')
+                          : '—'}
+                      </Td>
+                    )
+                  case 'roles':
+                    return (
+                      <Td key={c.id}>
+                        <div className="flex flex-wrap gap-1">
+                          {u.user_roles.map((ur) => (
+                            <Badge key={ur.role_id} tone="brand">
+                              {ur.roles?.name ?? ur.role_id}
+                            </Badge>
+                          ))}
+                        </div>
+                      </Td>
+                    )
+                  case 'status':
+                    return (
+                      <Td key={c.id}>
+                        <Badge
+                          tone={u.status === 'active' ? 'green' : 'slate'}
+                          data-testid="user-status"
+                        >
+                          {u.status}
+                        </Badge>
+                      </Td>
+                    )
+                  default:
+                    return null
+                }
+              })}
               {canManage && (
                 <Td>
                   <div className="flex justify-end gap-2">
