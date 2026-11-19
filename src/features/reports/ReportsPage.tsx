@@ -5,6 +5,7 @@ import { exportExcel, exportPdf, type CellFill } from './export'
 import { ATTENDANCE_STATUS, LEGEND, SUNDAY_META } from '@/features/attendance/status'
 import { Badge } from '@/components/ui/Badge'
 import { useUsers } from '@/features/admin/users/hooks'
+import { useTaskCategories } from '@/features/tasks/hooks'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -51,6 +52,7 @@ export function ReportsPage() {
   const [category, setCategory] = useState('')
   const [priority, setPriority] = useState('')
   const { data: users = [] } = useUsers()
+  const { data: taskCategories = [] } = useTaskCategories()
   const { data, isLoading } = useReport(type, {
     from: from || undefined,
     to: to || undefined,
@@ -162,6 +164,27 @@ export function ReportsPage() {
             className="w-40"
           />
         </div>
+        {type === 'task' && (
+          <div>
+            <Label htmlFor="report-task-group" className="text-xs text-slate-500">
+              Task group
+            </Label>
+            <Select
+              id="report-task-group"
+              data-testid="report-task-group"
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              className="w-44"
+            >
+              <option value="">All groups</option>
+              {taskCategories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
         {type === 'helpdesk' && (
           <>
             <div>

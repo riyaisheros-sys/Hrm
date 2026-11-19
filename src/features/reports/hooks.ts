@@ -106,6 +106,7 @@ interface TaskRow {
   progress_percent: number
   remarks: string | null
   status: { name: string } | null
+  category: { name: string } | null
   assignee: Person
   creator: Person
   task_status_history: { remarks: string | null; created_at: string }[]
@@ -266,11 +267,12 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     let q = supabase
       .from('tasks')
       .select(
-        'title,priority,due_date,created_at,completed_at,progress_percent,remarks, status:task_statuses(name), assignee:profiles!tasks_assignee_id_fkey(full_name,email), creator:profiles!tasks_created_by_fkey(full_name,email), task_status_history(remarks,created_at)',
+        'title,priority,due_date,created_at,completed_at,progress_percent,remarks, status:task_statuses(name), category:task_categories(name), assignee:profiles!tasks_assignee_id_fkey(full_name,email), creator:profiles!tasks_created_by_fkey(full_name,email), task_status_history(remarks,created_at)',
       )
     if (f.userId) q = q.eq('assignee_id', f.userId)
     if (f.from) q = q.gte('created_at', f.from)
     if (f.to) q = q.lte('created_at', `${f.to}T23:59:59`)
+    if (f.category) q = q.eq('category_id', f.category)
     const { data, error } = await q.order('created_at', { ascending: false }).limit(1000)
     if (error) throw error
     const list = (data ?? []) as unknown as TaskRow[]
@@ -278,6 +280,7 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
       title: 'Task Report',
       filename: 'task-report',
       columns: [
+        { key: 'taskGroup', label: 'Task Group' },
         { key: 'title', label: 'Task' },
         { key: 'assignee', label: 'Assignee' },
         { key: 'assignor', label: 'Assigned By' },
@@ -297,6 +300,7 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
           .sort((a, b) => b.created_at.localeCompare(a.created_at))
           .find((entry) => entry.remarks?.trim())?.remarks
         return {
+          taskGroup: t.category?.name ?? '—',
           title: t.title,
           assignee: name(t.assignee),
           assignor: name(t.creator),
