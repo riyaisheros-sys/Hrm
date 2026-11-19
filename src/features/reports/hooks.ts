@@ -125,7 +125,13 @@ interface TaskRow {
   assignee: (Person & { employee_code?: string | null }) | null
   creator: (Person & { employee_code?: string | null }) | null
   approver: Person | null
-  task_status_history: { remarks: string | null; created_at: string; changed_by: string | null }[]
+  task_status_history: {
+    remarks: string | null
+    created_at: string
+    changed_by: string | null
+    to_status: { name: string } | null
+    changer: { full_name: string | null; email: string } | null
+  }[]
 }
 interface ApprRow {
   attendance_score: number
@@ -312,7 +318,7 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     let q = supabase
       .from('tasks')
       .select(
-        'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by)',
+        'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by,to_status:task_statuses!task_status_history_to_status_id_fkey(name),changer:profiles!task_status_history_changed_by_fkey(full_name,email))',
       )
     if (f.userId) q = q.eq('assignee_id', f.userId)
     if (f.from) q = q.gte('created_at', f.from)
@@ -369,11 +375,31 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
         { key: 'delayDays', label: 'Delay Days' },
         { key: 'delayComments', label: 'Delay Comments' },
         { key: 'remarks', label: 'Remarks' },
+        { key: 'history', label: 'History' },
         { key: 'historyCount', label: 'History Entries' },
       ],
       rows: list.map((t) => {
         const delay = getTaskDelay(t.due_date, t.completed_at)
         const history = t.task_status_history ?? []
+        const historyChronological = [...history].sort((a, b) =>
+          a.created_at.localeCompare(b.created_at),
+        )
+        // Human-readable single-string of every status change — what the
+        // client meant by "show the content of the history, what work is
+        // done, what is history update". Each entry: "Status · 2 Nov by
+        // Riya · 'remark'". Joined with newlines so the table cell can
+        // render them one per line.
+        const historySummary = historyChronological
+          .map((h) => {
+            const status = h.to_status?.name ?? 'Updated'
+            const when = formatDate(h.created_at)
+            const who = h.changer?.full_name || h.changer?.email || 'System'
+            const note = h.remarks?.trim()
+            return note
+              ? `${status} · ${when} by ${who} — ${note}`
+              : `${status} · ${when} by ${who}`
+          })
+          .join('\n')
         const statusRemark = [...history]
           .sort((a, b) => b.created_at.localeCompare(a.created_at))
           .find((entry) => entry.remarks?.trim())?.remarks
@@ -408,6 +434,7 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
           delayDays: delay.isDelayed ? delay.days : 0,
           delayComments: delay.isDelayed ? statusRemark || t.remarks || '—' : '—',
           remarks: t.remarks ?? '—',
+          history: historySummary || '—',
           historyCount: history.length,
         }
       }),

@@ -477,12 +477,24 @@ export function ReportsPage() {
                       type === 'attendance' && c.key === 'status'
                         ? ATTENDANCE_STATUS[String(row._status ?? '')]
                         : undefined
+                    const value = String(row[c.key] ?? '')
+                    // History / Description / Remarks / Rework-reason etc can be
+                    // multi-line — keep whitespace and cap the visible area so
+                    // the row stays scannable. Click to expand (title tooltip).
+                    const isLong = c.key === 'history' || c.key === 'description' || c.key === 'remarks' || c.key === 'reworkReason' || c.key === 'rejectionReason'
                     return (
-                      <Td key={c.key}>
+                      <Td key={c.key} className={isLong ? 'align-top' : undefined}>
                         {meta ? (
-                          <Badge className={meta.className}>{String(row[c.key] ?? '')}</Badge>
+                          <Badge className={meta.className}>{value}</Badge>
+                        ) : isLong && value && value !== '—' ? (
+                          <div
+                            title={value}
+                            className="max-h-24 max-w-sm overflow-auto whitespace-pre-wrap text-xs leading-snug text-slate-700"
+                          >
+                            {value}
+                          </div>
                         ) : (
-                          String(row[c.key] ?? '')
+                          value
                         )}
                       </Td>
                     )
