@@ -118,7 +118,7 @@ export function ReportsPage() {
 
       <div className="mb-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <Label htmlFor="report-category">Window 1 · Report category</Label>
+          <Label htmlFor="report-category">Report category</Label>
           <Select
             id="report-category"
             data-testid="report-category"
@@ -135,7 +135,7 @@ export function ReportsPage() {
         </div>
         <ColumnChips
           config={colConfig}
-          title="Window 2 · Display headings"
+          title="Display Headings"
           testid="report-chips"
         />
       </div>
