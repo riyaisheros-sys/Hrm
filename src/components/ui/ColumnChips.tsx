@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, RotateCcw } from 'lucide-react'
+import { ArrowDown, ArrowUp, ChevronDown, Columns3, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import type { ColumnDef } from '@/lib/useColumnConfig'
 
@@ -42,19 +42,47 @@ export function ColumnChips({
   testid?: string
   className?: string
 }) {
+  const [open, setOpen] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (!panelRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
   const byId = new Map(config.all.map((c) => [c.id, c]))
   const ordered = config.pref.order
     .map((id) => byId.get(id))
     .filter((c): c is ColumnDef => !!c)
+  const hiddenCount = config.pref.hidden.length
+  const shownCount = config.all.length - hiddenCount
 
   return (
     <div
+      ref={panelRef}
       data-testid={testid}
-      className={cn(
-        'rounded-lg border border-slate-200 bg-slate-50 p-3',
-        className,
-      )}
+      className={cn('relative inline-block', className)}
     >
+      <button
+        type="button"
+        data-testid={`${testid}-button`}
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+      >
+        <Columns3 className="size-4" />
+        {title}
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+          {shownCount}/{config.all.length}
+        </span>
+        <ChevronDown className={cn('size-4 transition-transform', open && 'rotate-180')} />
+      </button>
+      {!open ? null : (
+      <div
+        className="absolute right-0 z-30 mt-2 w-[min(90vw,32rem)] rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-lg"
+      >
       <div className="mb-2 flex items-center justify-between">
         <p className="text-sm font-medium text-slate-700">{title}</p>
         <button
@@ -67,7 +95,7 @@ export function ColumnChips({
           <RotateCcw className="size-3" /> Reset
         </button>
       </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-2">
+      <div className="max-h-[60vh] overflow-y-auto flex flex-wrap gap-x-2 gap-y-2">
         {ordered.map((c, i) => {
           const visible = !config.pref.hidden.includes(c.id)
           const color = config.colorOf(c.id)
@@ -127,6 +155,8 @@ export function ColumnChips({
           )
         })}
       </div>
+      </div>
+      )}
     </div>
   )
 }

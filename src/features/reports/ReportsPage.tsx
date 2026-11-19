@@ -116,9 +116,11 @@ export function ReportsPage() {
         }
       />
 
-      <div className="mb-4 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <Label htmlFor="report-category">Select Report Category</Label>
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div className="min-w-[14rem] flex-1 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <Label htmlFor="report-category" className="text-xs text-slate-500">
+            Select Report Category
+          </Label>
           <Select
             id="report-category"
             data-testid="report-category"
