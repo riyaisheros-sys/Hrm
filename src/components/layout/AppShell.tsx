@@ -4,7 +4,6 @@ import {
   Award,
   BookText,
   Briefcase,
-  ChevronDown,
   Building2,
   CalendarClock,
   ClipboardCheck,
@@ -41,7 +40,7 @@ import { useViewMode } from '@/features/view-mode/view-mode-context'
 import { HealthBadge } from '@/features/health/HealthBadge'
 import { SidebarCustomizer } from './SidebarCustomizer'
 import { useSidebarPreferences } from './sidebar-preferences'
-import { groupForNav, sidebarGroupsFor } from './sidebar-groups'
+import { groupForNav } from './sidebar-groups'
 import { useEmployeeSidebarPolicy } from '@/features/admin/employee-panel/hooks'
 import { NotificationsBell } from '@/features/notifications/NotificationsBell'
 import { useToast } from '@/components/ui/toast-context'
@@ -271,11 +270,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       return visible !== false
     })
     .sort((a, b) => {
+      // Dashboard always first (home item), then alphabetical — groups are gone.
       if (a.to === '/') return -1
       if (b.to === '/') return 1
-      const ga = groupForNav(mode, a.testid)
-      const gb = groupForNav(mode, b.testid)
-      if (ga !== gb) return 0 // keep nav array's group ordering stable
       return a.label.localeCompare(b.label)
     })
   const itemIds = permittedItems.map((item) => item.testid)
@@ -312,69 +309,29 @@ export function AppShell({ children }: { children: ReactNode }) {
             HRMS
           </span>
         </div>
-        <nav className="flex-1 space-y-2 overflow-y-auto p-3" data-testid={`nav-${mode}`}>
-          {sidebarGroupsFor(mode)
-            .concat({ id: 'other', label: 'Other' })
-            .map((group) => {
-              const groupItems = items.filter(
-                (item) => groupForNav(mode, item.testid) === group.id,
-              )
-              if (groupItems.length === 0) return null
-              const collapsed = preferences.collapsedGroups.includes(group.id)
-              return (
-                <div key={group.id} data-testid={`nav-group-${group.id}`}>
-                  {!preferences.collapsed && (
-                    <button
-                      type="button"
-                      aria-expanded={!collapsed}
-                      data-testid={`nav-group-toggle-${group.id}`}
-                      onClick={() =>
-                        save.mutate({
-                          ...preferences,
-                          collapsedGroups: collapsed
-                            ? preferences.collapsedGroups.filter((id) => id !== group.id)
-                            : [...preferences.collapsedGroups, group.id],
-                        })
-                      }
-                      className="flex w-full items-center justify-between px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700"
-                    >
-                      <span>{group.label}</span>
-                      <ChevronDown
-                        className={cn(
-                          'size-3.5 transition-transform',
-                          collapsed && '-rotate-90',
-                        )}
-                      />
-                    </button>
-                  )}
-                  {!collapsed &&
-                    groupItems.map((item) => (
-                      <NavLink
-                        key={item.to}
-                        to={item.to}
-                        end={item.to === '/'}
-                        data-testid={item.testid}
-                        onClick={() => setMobileOpen(false)}
-                        className={({ isActive }) =>
-                          cn(
-                            'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                            preferences.collapsed && 'lg:justify-center lg:px-2',
-                            isActive
-                              ? 'bg-brand-50 text-brand-700'
-                              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                          )
-                        }
-                      >
-                        <item.icon className="size-5 shrink-0" />
-                        <span className={cn(preferences.collapsed && 'lg:hidden')}>
-                          {item.label}
-                        </span>
-                        {preferences.collapsed && <span className="sr-only">{item.label}</span>}
-                      </NavLink>
-                    ))}
-                </div>
-              )
-            })}
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3" data-testid={`nav-${mode}`}>
+          {items.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              data-testid={item.testid}
+              onClick={() => setMobileOpen(false)}
+              className={({ isActive }) =>
+                cn(
+                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  preferences.collapsed && 'lg:justify-center lg:px-2',
+                  isActive
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                )
+              }
+            >
+              <item.icon className="size-5 shrink-0" />
+              <span className={cn(preferences.collapsed && 'lg:hidden')}>{item.label}</span>
+              {preferences.collapsed && <span className="sr-only">{item.label}</span>}
+            </NavLink>
+          ))}
         </nav>
         <div className="border-t border-slate-200 p-3">
           <button
