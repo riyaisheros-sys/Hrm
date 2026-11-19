@@ -5,6 +5,7 @@ import {
   BookText,
   Briefcase,
   Building2,
+  ChevronDown,
   CalendarClock,
   ClipboardCheck,
   CalendarRange,
@@ -315,36 +316,60 @@ export function AppShell({ children }: { children: ReactNode }) {
               (item) => groupForNav(mode, item.testid) === group.id,
             )
             if (groupItems.length === 0) return null
-            const showHeader = group.id !== 'home' && !preferences.collapsed
+            // Home (Dashboard) stays always visible — only Entries/Reports are
+            // collapsible dropdowns per the client ask.
+            const collapsibleHeader = group.id !== 'home' && !preferences.collapsed
+            const groupCollapsed =
+              collapsibleHeader && preferences.collapsedGroups.includes(group.id)
             return (
               <div key={group.id} data-testid={`nav-group-${group.id}`} className="space-y-1">
-                {showHeader && (
-                  <h3 className="px-3 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    {group.label}
-                  </h3>
-                )}
-                {groupItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.to === '/'}
-                    data-testid={item.testid}
-                    onClick={() => setMobileOpen(false)}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                        preferences.collapsed && 'lg:justify-center lg:px-2',
-                        isActive
-                          ? 'bg-brand-50 text-brand-700'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
-                      )
+                {collapsibleHeader && (
+                  <button
+                    type="button"
+                    aria-expanded={!groupCollapsed}
+                    data-testid={`nav-group-toggle-${group.id}`}
+                    onClick={() =>
+                      save.mutate({
+                        ...preferences,
+                        collapsedGroups: groupCollapsed
+                          ? preferences.collapsedGroups.filter((id) => id !== group.id)
+                          : [...preferences.collapsedGroups, group.id],
+                      })
                     }
+                    className="flex w-full items-center justify-between rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:bg-slate-50 hover:text-slate-700"
                   >
-                    <item.icon className="size-5 shrink-0" />
-                    <span className={cn(preferences.collapsed && 'lg:hidden')}>{item.label}</span>
-                    {preferences.collapsed && <span className="sr-only">{item.label}</span>}
-                  </NavLink>
-                ))}
+                    <span>{group.label}</span>
+                    <ChevronDown
+                      className={cn(
+                        'size-3.5 transition-transform',
+                        groupCollapsed && '-rotate-90',
+                      )}
+                    />
+                  </button>
+                )}
+                {!groupCollapsed &&
+                  groupItems.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.to === '/'}
+                      data-testid={item.testid}
+                      onClick={() => setMobileOpen(false)}
+                      className={({ isActive }) =>
+                        cn(
+                          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                          preferences.collapsed && 'lg:justify-center lg:px-2',
+                          isActive
+                            ? 'bg-brand-50 text-brand-700'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                        )
+                      }
+                    >
+                      <item.icon className="size-5 shrink-0" />
+                      <span className={cn(preferences.collapsed && 'lg:hidden')}>{item.label}</span>
+                      {preferences.collapsed && <span className="sr-only">{item.label}</span>}
+                    </NavLink>
+                  ))}
               </div>
             )
           })}
