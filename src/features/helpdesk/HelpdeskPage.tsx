@@ -19,6 +19,8 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 import { Textarea } from '@/components/ui/Textarea'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { formatDateTime } from '@/lib/format'
@@ -37,6 +39,7 @@ export function HelpdeskPage() {
   const canDelete = hasPermission('helpdesk.delete')
   const hasActions = canEdit || canDelete
   const { data: tickets = [] } = useTickets()
+  const ticketsPage = usePagination(tickets, 25)
   const { data: users = [] } = useUsers()
   const { data: categories = [] } = useMasterItems('helpdesk_categories')
   const raise = useRaiseTicket()
@@ -148,7 +151,7 @@ export function HelpdeskPage() {
           </tr>
         </Thead>
         <Tbody>
-          {tickets.map((t) => (
+          {ticketsPage.pagedItems.map((t) => (
             <tr key={t.id} data-testid="ticket-row">
               <Td className="font-medium text-slate-900">
                 {t.subject}
@@ -254,6 +257,7 @@ export function HelpdeskPage() {
           ))}
         </Tbody>
       </Table>
+      <Pagination {...ticketsPage} testid="tickets-pagination" />
       {deleting && (
         <ConfirmDialog
           title="Delete helpdesk ticket"

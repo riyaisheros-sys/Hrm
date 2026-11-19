@@ -30,6 +30,8 @@ import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 import { cn } from '@/lib/cn'
 import { useMasterItems } from '@/features/admin/masters/hooks'
 
@@ -39,6 +41,7 @@ export function AppraisalAdminPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected = cycles.find((c) => c.id === selectedId) ?? cycles[0] ?? null
   const { data: appraisals = [] } = useAppraisals(selected?.id ?? null)
+  const appraisalsPage = usePagination(appraisals, 25, selected?.id)
   const compute = useComputeAppraisal()
   const addAll = useAddAllEmployees()
   const computeAll = useComputeAll()
@@ -179,7 +182,7 @@ export function AppraisalAdminPage() {
                 </tr>
               </Thead>
               <Tbody>
-                {appraisals.map((a) => (
+                {appraisalsPage.pagedItems.map((a) => (
                   <tr key={a.id} data-testid={`appraisal-row-${a.employee?.email}`}>
                     <Td className="font-medium text-slate-900">
                       {a.employee?.full_name || a.employee?.email}
@@ -235,6 +238,7 @@ export function AppraisalAdminPage() {
                 ))}
               </Tbody>
             </Table>
+            <Pagination {...appraisalsPage} testid="appraisals-pagination" />
           </div>
         )}
       </div>

@@ -29,6 +29,8 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 const ITEM_STATUS: OnboardingItem['status'][] = ['pending', 'submitted', 'verified']
@@ -56,6 +58,8 @@ export function DocumentsPage() {
     return [...latest.values()]
   }, [docs])
   const historyDocuments = docs.filter((document) => document.doc_type === historyType)
+  const latestPage = usePagination(latestDocuments, 25)
+  const historyPage = usePagination(historyDocuments, 25, historyType)
 
   return (
     <div data-testid="documents-page">
@@ -165,7 +169,7 @@ export function DocumentsPage() {
                 </tr>
               </Thead>
               <Tbody>
-                {latestDocuments.map((d) => (
+                {latestPage.pagedItems.map((d) => (
                   <tr key={d.id} data-testid="document-row">
                     <Td>
                       <Badge tone="slate" data-testid="doc-category">
@@ -210,6 +214,7 @@ export function DocumentsPage() {
               </Tbody>
             </Table>
           )}
+          <Pagination {...latestPage} testid="latest-docs-pagination" />
         </div>
 
         <JoiningChecklist employeeId={effectiveUser} />
@@ -260,7 +265,7 @@ export function DocumentsPage() {
           testid="document-version-history"
         >
           <div className="space-y-2">
-            {historyDocuments.map((document) => (
+            {historyPage.pagedItems.map((document) => (
               <div
                 key={document.id}
                 className="flex items-center justify-between rounded-lg border border-slate-200 p-3 text-sm"
@@ -282,6 +287,7 @@ export function DocumentsPage() {
               </div>
             ))}
           </div>
+          <Pagination {...historyPage} testid="doc-history-pagination" />
         </Modal>
       )}
       {manageTypes && <DocumentTypesModal onClose={() => setManageTypes(false)} />}

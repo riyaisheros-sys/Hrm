@@ -28,6 +28,8 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 import { LeaveDecisionModal } from './LeaveDecisionModal'
 
 const STATUS_TONE = {
@@ -70,6 +72,8 @@ export function LeaveApprovalsPage() {
   const onLeaveToday = approved.filter((r) => r.start_date <= today && r.end_date >= today).length
   const approvedDays = approved.reduce((s, r) => s + Number(r.days), 0)
   const filteredAll = statusFilter === 'all' ? all : all.filter((r) => r.status === statusFilter)
+  const pendingPage = usePagination(pending, 25)
+  const allPage = usePagination(filteredAll, 25, statusFilter)
 
   return (
     <div data-testid="leave-approvals-page">
@@ -99,7 +103,7 @@ export function LeaveApprovalsPage() {
             </tr>
           </Thead>
           <Tbody>
-            {pending.map((r) => (
+            {pendingPage.pagedItems.map((r) => (
               <tr key={r.id} data-testid={`approval-row-${r.requester?.email}`}>
                 <Td className="font-medium text-slate-900">{r.requester?.full_name || r.requester?.email}</Td>
                 <Td>{r.leave_type?.name}</Td>
@@ -133,6 +137,7 @@ export function LeaveApprovalsPage() {
           </Tbody>
         </Table>
       )}
+      <Pagination {...pendingPage} testid="leave-pending-pagination" />
 
       <section className="mt-10" data-testid="all-leave-section">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
@@ -174,7 +179,7 @@ export function LeaveApprovalsPage() {
               </tr>
             </Thead>
             <Tbody>
-              {filteredAll.map((r) => (
+              {allPage.pagedItems.map((r) => (
                 <tr key={r.id} data-testid={`all-leave-row-${r.requester?.email}`}>
                   <Td className="font-medium text-slate-900">{r.requester?.full_name || r.requester?.email}</Td>
                   <Td>{r.leave_type?.name}</Td>
@@ -213,6 +218,7 @@ export function LeaveApprovalsPage() {
             </Tbody>
           </Table>
         )}
+        <Pagination {...allPage} testid="leave-all-pagination" />
       </section>
 
       {remarkReq && <RemarkModal request={remarkReq} onClose={() => setRemarkReq(null)} />}

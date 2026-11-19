@@ -3,6 +3,8 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Badge } from '@/components/ui/Badge'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 
 const actionTone = {
   insert: 'green',
@@ -13,6 +15,7 @@ const actionTone = {
 export function AuditPage() {
   const { data: entries = [], isLoading } = useAuditLog()
   const { data: actors } = useActorMap()
+  const pagination = usePagination(entries, 25)
 
   return (
     <div data-testid="audit-page">
@@ -34,7 +37,7 @@ export function AuditPage() {
             </tr>
           </Thead>
           <Tbody>
-            {entries.map((e) => (
+            {pagination.pagedItems.map((e) => (
               <tr key={e.id}>
                 <Td className="whitespace-nowrap text-xs text-slate-500">
                   {new Date(e.created_at).toLocaleString()}
@@ -51,6 +54,7 @@ export function AuditPage() {
           </Tbody>
         </Table>
       )}
+      <Pagination {...pagination} testid="audit-pagination" />
     </div>
   )
 }

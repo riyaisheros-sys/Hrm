@@ -21,6 +21,8 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 const ASSET_TYPES = ['laptop', 'desktop', 'mobile', 'sim', 'id_card', 'headset', 'other']
@@ -39,6 +41,7 @@ export function AssetsPage() {
       [a.name, a.serial, a.batch_no, a.asset_type].some((f) => (f ?? '').toLowerCase().includes(q)),
     )
   }, [assets, search])
+  const assetsPage = usePagination(visible, 25, search)
 
   return (
     <div data-testid="assets-page">
@@ -81,7 +84,7 @@ export function AssetsPage() {
             </tr>
           </Thead>
           <Tbody>
-            {visible.map((a) => (
+            {assetsPage.pagedItems.map((a) => (
               <tr key={a.id} data-testid="asset-row">
                 <Td className="font-medium text-slate-900">{a.name}</Td>
                 <Td>{a.asset_type}</Td>
@@ -109,6 +112,7 @@ export function AssetsPage() {
           </Tbody>
         </Table>
       )}
+      <Pagination {...assetsPage} testid="assets-pagination" />
 
       {createOpen && <CreateAssetModal onClose={() => setCreateOpen(false)} />}
       {manage && <AssetModal asset={manage} onClose={() => setManage(null)} />}

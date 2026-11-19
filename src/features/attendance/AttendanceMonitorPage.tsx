@@ -31,6 +31,8 @@ import { Label } from '@/components/ui/Label'
 import { Modal } from '@/components/ui/Modal'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 
 export function AttendanceMonitorPage() {
   const { hasPermission } = useProfile()
@@ -47,6 +49,7 @@ export function AttendanceMonitorPage() {
   const [view, setView] = useState<'list' | 'register'>('list')
   const [correction, setCorrection] = useState<{ userId: string; date: string } | null>(null)
   const multiDay = from !== to
+  const pagination = usePagination(rows, 25, `${from}|${to}`)
 
   useAttendanceRealtime()
   useCloseStaleAttendance()
@@ -294,7 +297,7 @@ export function AttendanceMonitorPage() {
                 </tr>
               </Thead>
               <Tbody>
-                {rows.map((r) => {
+                {pagination.pagedItems.map((r) => {
                   const sunday = isSunday(r.work_date)
                   return (
                     <tr
@@ -363,6 +366,7 @@ export function AttendanceMonitorPage() {
               </Tbody>
             </Table>
           )}
+          <Pagination {...pagination} testid="monitor-pagination" />
         </>
       )}
 

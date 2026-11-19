@@ -33,6 +33,8 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 import { cn } from '@/lib/cn'
 
 const STATUSES = ['applied', 'interview', 'selected', 'rejected', 'joined']
@@ -42,6 +44,7 @@ export function RecruitmentPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected = openings.find((o) => o.id === selectedId) ?? openings[0] ?? null
   const { data: candidates = [] } = useCandidates(selected?.id ?? null)
+  const candidatesPage = usePagination(candidates, 25, selected?.id)
   const [openingModal, setOpeningModal] = useState(false)
   const [candidateModal, setCandidateModal] = useState(false)
   const [manageId, setManageId] = useState<string | null>(null)
@@ -102,7 +105,7 @@ export function RecruitmentPage() {
                 </tr>
               </Thead>
               <Tbody>
-                {candidates.map((c) => (
+                {candidatesPage.pagedItems.map((c) => (
                   <tr key={c.id} data-testid="candidate-row">
                     <Td className="font-medium text-slate-900">
                       {c.full_name}
@@ -136,6 +139,7 @@ export function RecruitmentPage() {
                 ))}
               </Tbody>
             </Table>
+            <Pagination {...candidatesPage} testid="candidates-pagination" />
           </div>
         )}
       </div>

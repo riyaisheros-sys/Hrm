@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { usePagination } from '@/lib/usePagination'
+import { Pagination } from '@/components/ui/Pagination'
 import { Check, CheckCheck, ChevronDown, ChevronRight, Eye, EyeOff, FolderOpen, History, MessageSquarePlus, Pencil, Plus, Send, Settings2, Trash2, Undo2, Users as UsersIcon, X } from 'lucide-react'
 import {
   useCreateStatus,
@@ -163,18 +165,13 @@ export function TasksPage() {
     })
   }
 
-  // Page-wise pagination — clients asked for this when the list grew long.
-  // A single UI row for a bulk group counts as one display item (not N).
-  const PAGE_SIZE = 25
-  const [page, setPage] = useState(0)
-  const totalPages = Math.max(1, Math.ceil(displayItems.length / PAGE_SIZE))
-  // Reset to first page whenever filters / search surface a different result set.
-  useEffect(() => {
-    setPage(0)
-  }, [filter, assignorFilter, assigneeFilter, statusFilter, showCompleted])
-  const pageStart = page * PAGE_SIZE
-  const pageEnd = Math.min(pageStart + PAGE_SIZE, displayItems.length)
-  const pagedItems = displayItems.slice(pageStart, pageEnd)
+  // Page-wise pagination — one UI row for a bulk group counts as one item.
+  const pagination = usePagination(
+    displayItems,
+    25,
+    `${filter}|${assignorFilter}|${assigneeFilter}|${statusFilter}|${showCompleted}`,
+  )
+  const { pagedItems, pageStart } = pagination
 
   function renderTaskRow(t: TaskRow, isChild: boolean, serial: number | null) {
     return (
@@ -593,42 +590,7 @@ export function TasksPage() {
         </Table>
       )}
 
-      {displayItems.length > PAGE_SIZE && (
-        <div
-          data-testid="tasks-pagination"
-          className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500"
-        >
-          <span>
-            Showing <strong className="text-slate-700">{pageStart + 1}</strong>–
-            <strong className="text-slate-700">{pageEnd}</strong> of{' '}
-            <strong className="text-slate-700">{displayItems.length}</strong>
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              data-testid="tasks-page-prev"
-              disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 enabled:hover:bg-slate-50 disabled:opacity-40"
-            >
-              ← Prev
-            </button>
-            <span className="px-2">
-              Page <strong className="text-slate-700">{page + 1}</strong> of{' '}
-              <strong className="text-slate-700">{totalPages}</strong>
-            </span>
-            <button
-              type="button"
-              data-testid="tasks-page-next"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600 enabled:hover:bg-slate-50 disabled:opacity-40"
-            >
-              Next →
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination {...pagination} testid="tasks-pagination" />
 
       {newOpen && (
         <NewTaskModal onClose={() => setNewOpen(false)} canAssign={canAssign} userId={user!.id} />

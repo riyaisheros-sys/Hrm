@@ -13,10 +13,13 @@ import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 export function VisitorsPage() {
   const { data: visitors = [] } = useVisitors()
+  const visitorsPage = usePagination(visitors, 25)
   const { data: users = [] } = useUsers()
   const register = useRegisterVisitor()
   const toast = useToast()
@@ -82,7 +85,7 @@ export function VisitorsPage() {
             </tr>
           </Thead>
           <Tbody>
-            {visitors.map((v) => (
+            {visitorsPage.pagedItems.map((v) => (
               <tr key={v.id} data-testid="visitor-row">
                 <Td className="font-medium text-slate-900">
                   {v.name}
@@ -115,6 +118,7 @@ export function VisitorsPage() {
           </Tbody>
         </Table>
       )}
+      <Pagination {...visitorsPage} testid="visitors-pagination" />
 
       <MeetingsSection />
     </div>

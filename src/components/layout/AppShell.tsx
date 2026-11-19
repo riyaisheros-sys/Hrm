@@ -290,10 +290,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex h-screen overflow-hidden bg-slate-50">
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 flex w-64 transform flex-col border-r border-slate-200 bg-white transition-[transform,width] lg:static lg:translate-x-0',
+          'fixed inset-y-0 left-0 z-40 flex w-64 transform flex-col border-r border-slate-200 bg-white transition-[transform,width] lg:static lg:h-screen lg:translate-x-0',
           preferences.collapsed && 'lg:w-20',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
@@ -358,7 +358,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         />
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex h-16 items-center gap-3 border-b border-slate-200 bg-white px-4">
           <button
             className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden"
@@ -425,7 +425,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </button>
         </header>
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8" data-testid="app-main">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8" data-testid="app-main">
           {children}
         </main>
       </div>

@@ -29,6 +29,8 @@ import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Checkbox } from '@/components/ui/Checkbox'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
+import { Pagination } from '@/components/ui/Pagination'
+import { usePagination } from '@/lib/usePagination'
 
 export function UsersPage() {
   const { hasPermission } = useProfile()
@@ -45,6 +47,7 @@ export function UsersPage() {
   const nameById = new Map(users.map((u) => [u.id, u.full_name || u.email]))
   const deptById = new Map(departments.map((d) => [d.id, d.name]))
   const teamById = new Map(teams.map((t) => [t.id, t.name]))
+  const pagination = usePagination(users, 25)
 
   return (
     <div data-testid="users-page">
@@ -80,9 +83,11 @@ export function UsersPage() {
               <Td colSpan={9}>Loading…</Td>
             </tr>
           )}
-          {users.map((u, i) => (
+          {pagination.pagedItems.map((u, i) => (
             <tr key={u.id} data-testid={`user-row-${u.email}`}>
-              <Td className="w-10 text-xs text-slate-400 tabular-nums">{i + 1}</Td>
+              <Td className="w-10 text-xs text-slate-400 tabular-nums">
+                {pagination.pageStart + i + 1}
+              </Td>
               <Td className="font-medium text-slate-900">
                 <div className="flex items-center gap-2">
                   {u.avatar_url ? (
@@ -142,6 +147,7 @@ export function UsersPage() {
           ))}
         </Tbody>
       </Table>
+      <Pagination {...pagination} testid="users-pagination" />
 
       {editing && (
         <EditUserModal user={editing} onClose={() => setEditing(null)} allUsers={users} />
