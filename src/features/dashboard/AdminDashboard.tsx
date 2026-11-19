@@ -235,11 +235,15 @@ export function AdminDashboard() {
     day: 'numeric',
     month: 'short',
   })
+  // Labels say "today" on today; "on <short date>" when the admin walked
+  // the dashboard back — avoids the confusing "Present today" on a past day.
+  const isToday = today === realToday
+  const dateSuffix = isToday ? 'today' : `on ${new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`
   const content: Record<string, ReactNode> = {
     employees: <Stat label="Employees" value={users.length} icon={Users} to="/admin/users" />,
     present: (
       <Stat
-        label={`Present today (of ${users.length})`}
+        label={`Present ${dateSuffix} (of ${users.length})`}
         value={presentToday}
         icon={CalendarCheck}
         tone="green"
@@ -248,7 +252,7 @@ export function AdminDashboard() {
     ),
     late: (
       <Stat
-        label="Late arrivals today"
+        label={`Late arrivals ${dateSuffix}`}
         value={lateToday}
         icon={AlarmClock}
         tone="amber"
@@ -279,10 +283,10 @@ export function AdminDashboard() {
       />
     ),
     'absent-today': (
-      <Stat label="Absent today" value={absentToday} icon={UserX} tone="red" to="/admin/attendance" />
+      <Stat label={`Absent ${dateSuffix}`} value={absentToday} icon={UserX} tone="red" to="/admin/attendance" />
     ),
     'overtime-today': (
-      <Stat label="Overtime minutes (today)" value={overtimeToday} icon={Clock} tone="blue" to="/admin/attendance" />
+      <Stat label={`Overtime minutes (${dateSuffix})`} value={overtimeToday} icon={Clock} tone="blue" to="/admin/attendance" />
     ),
     'missed-punchouts': (
       <Stat label="Missed punch-outs" value={missedPunchOuts} icon={TriangleAlert} tone="amber" to="/admin/attendance" />
@@ -303,13 +307,13 @@ export function AdminDashboard() {
       <Stat label="Active candidates" value={activeCandidates} icon={Briefcase} tone="brand" to="/admin/recruitment" />
     ),
     'interviews-today': (
-      <Stat label="Interviews today" value={interviewsToday} icon={UserCheck} tone="brand" to="/admin/recruitment" />
+      <Stat label={`Interviews ${dateSuffix}`} value={interviewsToday} icon={UserCheck} tone="brand" to="/admin/recruitment" />
     ),
     'visitors-today': (
-      <Stat label="Visitors today" value={visitorsToday} icon={IdCard} tone="brand" to="/admin/visitors" />
+      <Stat label={`Visitors ${dateSuffix}`} value={visitorsToday} icon={IdCard} tone="brand" to="/admin/visitors" />
     ),
     'meetings-today': (
-      <Stat label="Meetings today" value={meetingsToday} icon={CalendarRange} tone="brand" to="/admin/visitors" />
+      <Stat label={`Meetings ${dateSuffix}`} value={meetingsToday} icon={CalendarRange} tone="brand" to="/admin/visitors" />
     ),
     'appraisals-pending': (
       <Stat label="Appraisals pending" value={pendingAppraisals} icon={Award} tone="amber" to="/admin/appraisal" />

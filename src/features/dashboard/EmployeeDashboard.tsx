@@ -192,6 +192,10 @@ export function EmployeeDashboard() {
       : 'Not punched in'
   const attSub = att?.day ? `Worked ${formatMinutes(att.day.worked_minutes)}` : 'Tap to punch'
 
+  const isToday = today === realToday
+  const dateSuffix = isToday
+    ? 'today'
+    : `on ${new Date(`${today}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`
   const dateLabel = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, {
     weekday: 'long',
     day: 'numeric',
@@ -200,7 +204,7 @@ export function EmployeeDashboard() {
   const content: Record<string, ReactNode> = {
     attendance: (
       <Stat
-        label="Attendance today"
+        label={`Attendance ${dateSuffix}`}
         value={attValue}
         sub={attSub}
         icon={Fingerprint}
@@ -311,7 +315,7 @@ export function EmployeeDashboard() {
     ),
     'meetings-today': (
       <Stat
-        label="Meetings today"
+        label={`Meetings ${dateSuffix}`}
         value={myMeetingsToday}
         icon={Users}
         tone="brand"
