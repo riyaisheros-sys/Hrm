@@ -37,6 +37,7 @@ export const SIDEBAR_GROUP_FOR: Record<string, Record<string, string>> = {
     'nav-lifecycle':         'entries',
     'nav-salary-admin':      'entries',
     'nav-appraisal-admin':   'entries',
+    'nav-kra-kpi':           'entries',
     'nav-documents':         'entries',
     'nav-assets':            'entries',
     'nav-training':          'entries',

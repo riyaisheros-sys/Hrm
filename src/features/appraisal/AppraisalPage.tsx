@@ -3,6 +3,8 @@ import { Eye } from 'lucide-react'
 import { useMyAppraisals, useUpdateEmployeeAppraisalFeedback } from './hooks'
 import { AppraisalHistoryList, RatingStars } from './components'
 import { APPRAISAL_FORMULA, appraisalMarks, appraisalRating } from './scoring'
+import { ScorecardModal } from '@/features/performance/AppraisalScorecard'
+import { useTeamAppraisals } from '@/features/performance/hooks'
 import { useToast } from '@/components/ui/toast-context'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardBody } from '@/components/ui/Card'
@@ -25,6 +27,8 @@ type MyAppraisal = NonNullable<ReturnType<typeof useMyAppraisals>['data']>[numbe
 export function AppraisalPage() {
   const { data: appraisals = [], isLoading } = useMyAppraisals()
   const [detail, setDetail] = useState<MyAppraisal | null>(null)
+  const { data: team = [] } = useTeamAppraisals()
+  const [scorecard, setScorecard] = useState<{ id: string; title: string } | null>(null)
 
   return (
     <div data-testid="appraisal-page">
@@ -77,6 +81,17 @@ export function AppraisalPage() {
                     >
                       <Eye className="size-4" /> Full details
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="ml-2"
+                      data-testid="my-appraisal-scorecard"
+                      onClick={() =>
+                        setScorecard({ id: a.id, title: `My KRA / KPI · ${cycle?.name ?? ''}` })
+                      }
+                    >
+                      KRA / KPI
+                    </Button>
                   </div>
                 </CardBody>
               </Card>
@@ -85,7 +100,53 @@ export function AppraisalPage() {
         </div>
       )}
 
+      {team.length > 0 && (
+        <section className="mt-8" data-testid="team-appraisals">
+          <h2 className="mb-1 text-sm font-semibold text-slate-900">My team's appraisals</h2>
+          <p className="mb-3 text-xs text-slate-500">
+            People who report to you. Open the scorecard to fill the Manager column.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {team.map((t) => (
+              <Card key={t.id} data-testid="team-appraisal-card">
+                <CardBody className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold text-slate-900">{t.employee}</p>
+                    <Badge tone={t.cycle?.status === 'open' ? 'green' : 'slate'}>
+                      {t.cycle?.status ?? '—'}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {t.cycle?.name} · {t.cycle?.period_start} → {t.cycle?.period_end}
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-testid="team-appraisal-scorecard"
+                    onClick={() =>
+                      setScorecard({
+                        id: t.id,
+                        title: `KRA / KPI · ${t.employee} · ${t.cycle?.name ?? ''}`,
+                      })
+                    }
+                  >
+                    Score KRA / KPI
+                  </Button>
+                </CardBody>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
       {detail && <MyAppraisalModal appraisal={detail} onClose={() => setDetail(null)} />}
+      {scorecard && (
+        <ScorecardModal
+          appraisalId={scorecard.id}
+          title={scorecard.title}
+          onClose={() => setScorecard(null)}
+        />
+      )}
     </div>
   )
 }

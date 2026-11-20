@@ -8,12 +8,15 @@ export function Modal({
   title,
   children,
   testid,
+  size = 'md',
 }: {
   open: boolean
   onClose: () => void
   title: string
   children: ReactNode
   testid?: string
+  /** 'wide' is for tables that need room (e.g. the KRA / KPI scorecard). */
+  size?: 'md' | 'wide'
 }) {
   useEffect(() => {
     if (!open) return
@@ -39,7 +42,8 @@ export function Modal({
         aria-label={title}
         data-testid={testid}
         className={cn(
-          'relative z-10 max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl',
+          'relative z-10 max-h-[85vh] w-full overflow-y-auto rounded-2xl bg-white shadow-xl',
+          size === 'wide' ? 'max-w-6xl' : 'max-w-lg',
         )}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">

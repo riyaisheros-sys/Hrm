@@ -94,6 +94,13 @@ const adminNav: NavItem[] = [
     perm: 'appraisal.view',
   },
   {
+    to: '/admin/kra-kpi',
+    label: 'KRA / KPI Master',
+    icon: Award,
+    testid: 'nav-kra-kpi',
+    perm: 'users.manage',
+  },
+  {
     to: '/admin/reports',
     label: 'Reports',
     icon: FileBarChart,

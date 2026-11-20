@@ -40,6 +40,7 @@ import { TrainingPage } from '@/features/training/TrainingPage'
 import { MyTrainingPage } from '@/features/training/MyTrainingPage'
 import { MastersPage } from '@/features/admin/masters/MastersPage'
 import { EmployeePanelPage } from '@/features/admin/employee-panel/EmployeePanelPage'
+import { KraKpiMasterPage } from '@/features/performance/KraKpiMasterPage'
 
 export function App() {
   return (
@@ -237,6 +238,14 @@ export function App() {
           element={
             <RequirePermission perm="users.manage">
               <MastersPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/admin/kra-kpi"
+          element={
+            <RequirePermission perm={['users.manage', 'appraisal.manage']}>
+              <KraKpiMasterPage />
             </RequirePermission>
           }
         />

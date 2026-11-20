@@ -85,6 +85,9 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
 
   // Performance / Growth
   { kind: 'simple', value: 'appraisal_types', label: 'Appraisal Types', module: 'Performance' },
+  { kind: 'linked', module: 'Performance', label: 'KRA master', href: '/admin/kra-kpi' },
+  { kind: 'linked', module: 'Performance', label: 'KPI master', href: '/admin/kra-kpi' },
+  { kind: 'linked', module: 'Performance', label: 'Designations & default KRA / KPI', href: '/admin/kra-kpi' },
   { kind: 'linked', module: 'Performance', label: 'Appraisal Cycles', href: '/admin/appraisal' },
   { kind: 'linked', module: 'Performance', label: 'Appraisals', href: '/admin/appraisal' },
 

@@ -883,6 +883,165 @@ export type Database = {
         }
         Relationships: []
       }
+      designations: {
+        Row: {
+          id: string
+          department_id: string
+          name: string
+          is_active: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          department_id: string
+          name: string
+          is_active?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          department_id?: string
+          name?: string
+          is_active?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      performance_items: {
+        Row: {
+          id: string
+          kind: string
+          name: string
+          description: string | null
+          system_metric: string | null
+          is_active: boolean
+          sort_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          kind: string
+          name: string
+          description?: string | null
+          system_metric?: string | null
+          is_active?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          kind?: string
+          name?: string
+          description?: string | null
+          system_metric?: string | null
+          is_active?: boolean
+          sort_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      designation_performance_items: {
+        Row: {
+          designation_id: string
+          item_id: string
+        }
+        Insert: {
+          designation_id: string
+          item_id: string
+        }
+        Update: {
+          designation_id?: string
+          item_id?: string
+        }
+        Relationships: []
+      }
+      user_performance_items: {
+        Row: {
+          user_id: string
+          item_id: string
+          created_at: string
+        }
+        Insert: {
+          user_id: string
+          item_id: string
+          created_at?: string
+        }
+        Update: {
+          user_id?: string
+          item_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
+      appraisal_item_scores: {
+        Row: {
+          id: string
+          appraisal_id: string
+          item_id: string | null
+          kind: string
+          item_name: string
+          sort_order: number
+          system_metric: string | null
+          system_score: number | null
+          system_remarks: string | null
+          employee_score: number | null
+          employee_remarks: string | null
+          manager_score: number | null
+          manager_remarks: string | null
+          hr_score: number | null
+          hr_remarks: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          appraisal_id: string
+          item_id?: string | null
+          kind: string
+          item_name: string
+          sort_order?: number
+          system_metric?: string | null
+          system_score?: number | null
+          system_remarks?: string | null
+          employee_score?: number | null
+          employee_remarks?: string | null
+          manager_score?: number | null
+          manager_remarks?: string | null
+          hr_score?: number | null
+          hr_remarks?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          appraisal_id?: string
+          item_id?: string | null
+          kind?: string
+          item_name?: string
+          sort_order?: number
+          system_metric?: string | null
+          system_score?: number | null
+          system_remarks?: string | null
+          employee_score?: number | null
+          employee_remarks?: string | null
+          manager_score?: number | null
+          manager_remarks?: string | null
+          hr_score?: number | null
+          hr_remarks?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       departments: {
         Row: {
           company_id: string
@@ -2256,6 +2415,7 @@ export type Database = {
           kpi: string | null
           kra_value: number | null
           kpi_value: number | null
+          designation_id: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -2275,6 +2435,7 @@ export type Database = {
           kpi?: string | null
           kra_value?: number | null
           kpi_value?: number | null
+          designation_id?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -2294,6 +2455,7 @@ export type Database = {
           kpi?: string | null
           kra_value?: number | null
           kpi_value?: number | null
+          designation_id?: string | null
         }
         Relationships: [
           {

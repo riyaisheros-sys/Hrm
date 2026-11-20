@@ -16,6 +16,7 @@ import {
   type AppraisalRow,
 } from './hooks'
 import { AppraisalHistoryList, RatingStars } from './components'
+import { ScorecardModal } from '@/features/performance/AppraisalScorecard'
 import { APPRAISAL_FORMULA, appraisalMarks, appraisalRating } from './scoring'
 import { useUsers } from '@/features/admin/users/hooks'
 import { useToast } from '@/components/ui/toast-context'
@@ -52,6 +53,7 @@ export function AppraisalAdminPage() {
   const [editingCycle, setEditingCycle] = useState<AppraisalCycle | null>(null)
   const [apprModal, setApprModal] = useState(false)
   const [detailRow, setDetailRow] = useState<AppraisalRow | null>(null)
+  const [scorecardRow, setScorecardRow] = useState<AppraisalRow | null>(null)
   const [confirmRemoveRow, setConfirmRemoveRow] = useState<AppraisalRow | null>(null)
   const [confirmDeleteCycle, setConfirmDeleteCycle] = useState(false)
 
@@ -213,6 +215,14 @@ export function AppraisalAdminPage() {
                         <Button
                           size="sm"
                           variant="outline"
+                          data-testid={`appraisal-scorecard-${a.employee?.email}`}
+                          onClick={() => setScorecardRow(a)}
+                        >
+                          KRA / KPI
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
                           data-testid="compute-appraisal"
                           loading={compute.isPending}
                           onClick={() =>
@@ -248,6 +258,13 @@ export function AppraisalAdminPage() {
         <AppraisalModal cycleId={selected.id} onClose={() => setApprModal(false)} />
       )}
       {detailRow && <DetailsModal appraisal={detailRow} onClose={() => setDetailRow(null)} />}
+      {scorecardRow && (
+        <ScorecardModal
+          appraisalId={scorecardRow.id}
+          title={`KRA / KPI · ${scorecardRow.employee?.full_name || scorecardRow.employee?.email || ''}`}
+          onClose={() => setScorecardRow(null)}
+        />
+      )}
       {confirmRemoveRow && selected && (
         <ConfirmDialog
           title="Remove from period"

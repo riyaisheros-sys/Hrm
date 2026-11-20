@@ -37,6 +37,7 @@ export interface ProfileUpdate {
   kpi?: string | null
   kra_value?: number | null
   kpi_value?: number | null
+  designation_id?: string | null
 }
 
 export async function uploadProfilePicture(userId: string, file: File) {

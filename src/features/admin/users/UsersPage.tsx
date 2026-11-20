@@ -35,6 +35,12 @@ import { usePagination } from '@/lib/usePagination'
 import { ColumnChips } from '@/components/ui/ColumnChips'
 import { SortFilterTh } from '@/components/ui/SortFilterTh'
 import { useTableControls } from '@/lib/useTableControls'
+import { PerformancePicker } from '@/features/performance/PerformancePicker'
+import {
+  setUserPerformanceItems,
+  useUserPerformanceItems,
+} from '@/features/performance/hooks'
+import { useQueryClient } from '@tanstack/react-query'
 import { useColumnConfig } from '@/lib/useColumnConfig'
 
 export function UsersPage() {
@@ -376,6 +382,12 @@ function EditUserModal({
   const [taskCapacity, setTaskCapacity] = useState(
     user.task_capacity != null ? String(user.task_capacity) : '',
   )
+  const qc = useQueryClient()
+  const { data: savedItems } = useUserPerformanceItems(user.id)
+  const [designationId, setDesignationId] = useState(user.designation_id ?? '')
+  // null = untouched, show what is saved; a Set = the admin's pending choice.
+  const [itemDraft, setItemDraft] = useState<Set<string> | null>(null)
+  const selectedItems = itemDraft ?? savedItems ?? new Set<string>()
   const [kraValue, setKraValue] = useState(
     user.kra_value != null ? String(user.kra_value) : '',
   )
@@ -401,7 +413,12 @@ function EditUserModal({
         task_capacity: taskCapacity.trim() ? Math.max(1, Math.round(Number(taskCapacity))) : null,
         kra_value: kraValue.trim() ? Number(kraValue) : null,
         kpi_value: kpiValue.trim() ? Number(kpiValue) : null,
+        designation_id: designationId || null,
       })
+      if (itemDraft) {
+        await setUserPerformanceItems(user.id, [...itemDraft])
+        qc.invalidateQueries({ queryKey: ['user-performance-items', user.id] })
+      }
       await setUserRoles.mutateAsync({ userId: user.id, roleIds: [...roleIds] })
       if (Object.keys(quotaOverrides).length > 0) {
         const quotas: LeaveQuotaInput[] = leaveTypes.map((t) => ({
@@ -572,6 +589,18 @@ function EditUserModal({
           </div>
         </div>
 
+        <PerformancePicker
+          idPrefix="user"
+          departmentId={departmentId}
+          designationId={designationId}
+          selected={selectedItems}
+          onDesignationChange={(id, defaults) => {
+            setDesignationId(id)
+            if (id) setItemDraft(defaults)
+          }}
+          onSelectedChange={setItemDraft}
+        />
+
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label htmlFor="user-kra">KRA target (number)</Label>
@@ -680,6 +709,9 @@ function AddEmployeeModal({ onClose, allUsers }: { onClose: () => void; allUsers
   const [quotaOverrides, setQuotaOverrides] = useState<Record<string, string>>({})
   const [kraValue, setKraValue] = useState('')
   const [kpiValue, setKpiValue] = useState('')
+  const [designationId, setDesignationId] = useState('')
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
+  const updateProfile = useUpdateProfile()
   const pictureRef = useRef<HTMLInputElement>(null)
   const quotaBaseline = (t: LeaveType) => Number(t.default_annual_quota)
 
@@ -710,6 +742,21 @@ function AddEmployeeModal({ onClose, allUsers }: { onClose: () => void; allUsers
               onSuccess: async (created) => {
                 const picture = pictureRef.current?.files?.[0]
                 if (picture) await uploadProfilePicture(created.userId, picture)
+                // Designation + KRA / KPI are written straight after creation.
+                try {
+                  if (designationId)
+                    await updateProfile.mutateAsync({
+                      id: created.userId,
+                      designation_id: designationId,
+                    })
+                  if (selectedItems.size)
+                    await setUserPerformanceItems(created.userId, [...selectedItems])
+                } catch (err) {
+                  toast.error(
+                    'Employee created, but designation / KRA / KPI were not saved',
+                    (err as Error).message,
+                  )
+                }
                 toast.success('Employee created', 'Share the temporary password out-of-band.')
                 onClose()
               },
@@ -841,6 +888,17 @@ function AddEmployeeModal({ onClose, allUsers }: { onClose: () => void; allUsers
             ))}
           </div>
         </div>
+        <PerformancePicker
+          idPrefix="new-emp"
+          departmentId={departmentId}
+          designationId={designationId}
+          selected={selectedItems}
+          onDesignationChange={(id, defaults) => {
+            setDesignationId(id)
+            if (id) setSelectedItems(defaults)
+          }}
+          onSelectedChange={setSelectedItems}
+        />
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <Label htmlFor="ne-kra">KRA target (number)</Label>
