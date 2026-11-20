@@ -21,6 +21,8 @@ import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
+import { SortFilterTh } from '@/components/ui/SortFilterTh'
+import { useTableControls } from '@/lib/useTableControls'
 import { Textarea } from '@/components/ui/Textarea'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { formatDateTime } from '@/lib/format'
@@ -39,7 +41,16 @@ export function HelpdeskPage() {
   const canDelete = hasPermission('helpdesk.delete')
   const hasActions = canEdit || canDelete
   const { data: tickets = [] } = useTickets()
-  const ticketsPage = usePagination(tickets, 25)
+  const controls = useTableControls(tickets, {
+    subject: (t) => t.subject,
+    category: (t) => t.category,
+    raisedBy: (t) => nameById.get(t.raised_by),
+    assignedTo: (t) => nameById.get(t.assigned_to ?? '') ?? 'Unassigned',
+    created: (t) => t.created_at,
+    closed: (t) => t.closed_at,
+    status: (t) => t.status,
+  })
+  const ticketsPage = usePagination(controls.rows, 25, controls.stateKey)
   const { data: users = [] } = useUsers()
   const { data: categories = [] } = useMasterItems('helpdesk_categories')
   const raise = useRaiseTicket()
@@ -139,13 +150,13 @@ export function HelpdeskPage() {
       <Table data-testid="tickets-table">
         <Thead>
           <tr>
-            <Th>Subject</Th>
-            <Th>Category</Th>
-            <Th>Raised by</Th>
-            <Th>Assigned to</Th>
-            <Th>Created</Th>
-            <Th>Closed</Th>
-            <Th>Status</Th>
+            <SortFilterTh controls={controls} k="subject">Subject</SortFilterTh>
+            <SortFilterTh controls={controls} k="category">Category</SortFilterTh>
+            <SortFilterTh controls={controls} k="raisedBy">Raised by</SortFilterTh>
+            <SortFilterTh controls={controls} k="assignedTo">Assigned to</SortFilterTh>
+            <SortFilterTh controls={controls} k="created" filterable={false}>Created</SortFilterTh>
+            <SortFilterTh controls={controls} k="closed" filterable={false}>Closed</SortFilterTh>
+            <SortFilterTh controls={controls} k="status">Status</SortFilterTh>
             <Th>SLA</Th>
             {hasActions && <Th className="text-right">Actions</Th>}
           </tr>

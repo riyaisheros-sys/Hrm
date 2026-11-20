@@ -23,6 +23,8 @@ import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
+import { SortFilterTh } from '@/components/ui/SortFilterTh'
+import { useTableControls } from '@/lib/useTableControls'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 const ASSET_TYPES = ['laptop', 'desktop', 'mobile', 'sim', 'id_card', 'headset', 'other']
@@ -41,7 +43,15 @@ export function AssetsPage() {
       [a.name, a.serial, a.batch_no, a.asset_type].some((f) => (f ?? '').toLowerCase().includes(q)),
     )
   }, [assets, search])
-  const assetsPage = usePagination(visible, 25, search)
+  const controls = useTableControls(visible, {
+    name: (a) => a.name,
+    type: (a) => a.asset_type,
+    serial: (a) => a.serial,
+    batch: (a) => a.batch_no,
+    status: (a) => a.status,
+    holder: (a) => holders?.get(a.id),
+  })
+  const assetsPage = usePagination(controls.rows, 25, `${search}|${controls.stateKey}`)
 
   return (
     <div data-testid="assets-page">
@@ -74,12 +84,12 @@ export function AssetsPage() {
         <Table data-testid="assets-table">
           <Thead>
             <tr>
-              <Th>Asset</Th>
-              <Th>Type</Th>
-              <Th>Serial no</Th>
-              <Th>Batch no</Th>
-              <Th>Status</Th>
-              <Th>Assigned to</Th>
+              <SortFilterTh controls={controls} k="name">Asset</SortFilterTh>
+              <SortFilterTh controls={controls} k="type">Type</SortFilterTh>
+              <SortFilterTh controls={controls} k="serial">Serial no</SortFilterTh>
+              <SortFilterTh controls={controls} k="batch">Batch no</SortFilterTh>
+              <SortFilterTh controls={controls} k="status">Status</SortFilterTh>
+              <SortFilterTh controls={controls} k="holder">Assigned to</SortFilterTh>
               <Th className="text-right">Manage</Th>
             </tr>
           </Thead>

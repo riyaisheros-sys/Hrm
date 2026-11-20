@@ -26,6 +26,8 @@ import { Card, CardBody } from '@/components/ui/Card'
 import { ColumnChips } from '@/components/ui/ColumnChips'
 import { useColumnConfig } from '@/lib/useColumnConfig'
 import { StickyHeader } from '@/components/ui/StickyHeader'
+import { SortFilterTh } from '@/components/ui/SortFilterTh'
+import { useTableControls } from '@/lib/useTableControls'
 import { cn } from '@/lib/cn'
 
 export function HierarchyPage() {
@@ -161,10 +163,17 @@ export function HierarchyPage() {
   const colConfig = useColumnConfig('hierarchy', COLUMNS)
   const visibleIds = new Set(colConfig.visible.map((c) => c.id))
   const hasFilters = !!(deptFilter || managerFilter || search)
+  const controls = useTableControls(filteredRows, {
+    department: (r) => r.deptName,
+    team: (r) => r.teamName,
+    members: (r) => r.members.map((m) => m.full_name || m.email).join(', '),
+    manager: (r) => (r.managerId ? nameById.get(r.managerId) : ''),
+    company: (r) => r.company,
+  })
+  const tableRows = controls.rows
 
   return (
     <div data-testid="hierarchy-page">
-      <StickyHeader testid="hierarchy-sticky-header">
       <PageHeader
         title="Departments & Teams"
         description="Structure your organisation. Assign reporting managers to teams."
@@ -224,6 +233,9 @@ export function HierarchyPage() {
         </Card>
       )}
 
+      {/* Only the table toolbar stays pinned — the companies card scrolls away
+          so the table keeps most of the screen. */}
+      <StickyHeader testid="hierarchy-sticky-header" className="pt-3">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-sm font-semibold tracking-wide text-slate-500 uppercase">
           Departments &amp; Teams
@@ -330,7 +342,7 @@ export function HierarchyPage() {
             <tr>
               {colConfig.visible.map((c) => {
                 const color = colConfig.colorOf(c.id)
-                return (
+                return c.id === 'sno' || c.id === 'actions' ? (
                   <Th
                     key={c.id}
                     className={cn(
@@ -341,14 +353,22 @@ export function HierarchyPage() {
                   >
                     {c.label}
                   </Th>
+                ) : (
+                  <SortFilterTh
+                    key={c.id}
+                    controls={controls}
+                    k={c.id}
+                    style={color ? { color } : undefined}
+                  >
+                    {c.label}
+                  </SortFilterTh>
                 )
               })}
             </tr>
           </Thead>
           <Tbody>
-            {filteredRows.map((r, i) => {
-              const firstOfDept =
-                i === 0 || filteredRows[i - 1].deptId !== r.deptId
+            {tableRows.map((r, i) => {
+              const firstOfDept = i === 0 || tableRows[i - 1].deptId !== r.deptId
               const managerName = r.managerId ? (nameById.get(r.managerId) ?? '—') : '—'
               const managerEmail = r.managerId ? (emailById.get(r.managerId) ?? '') : ''
               return (

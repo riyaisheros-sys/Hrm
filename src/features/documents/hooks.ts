@@ -70,6 +70,22 @@ export function useEmployeeDocuments(employeeId: string | null) {
   })
 }
 
+/** Every uploaded document across all employees (admin overview). RLS limits
+ *  this to what the caller may see. */
+export function useAllEmployeeDocuments() {
+  return useQuery({
+    queryKey: ['emp-documents', 'all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employee_documents')
+        .select('*')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data
+    },
+  })
+}
+
 export function useMyDocuments() {
   const { user } = useAuth()
   return useQuery({

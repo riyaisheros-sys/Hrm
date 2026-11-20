@@ -15,11 +15,19 @@ import { Select } from '@/components/ui/Select'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
+import { SortFilterTh } from '@/components/ui/SortFilterTh'
+import { useTableControls } from '@/lib/useTableControls'
 import { EmptyState } from '@/components/ui/EmptyState'
 
 export function VisitorsPage() {
   const { data: visitors = [] } = useVisitors()
-  const visitorsPage = usePagination(visitors, 25)
+  const controls = useTableControls(visitors, {
+    visitor: (v) => `${v.name} ${v.company ?? ''}`,
+    host: (v) => (v.host_id ? nameById.get(v.host_id) : ''),
+    date: (v) => v.visit_date,
+    pass: (v) => v.pass_code,
+  })
+  const visitorsPage = usePagination(controls.rows, 25, controls.stateKey)
   const { data: users = [] } = useUsers()
   const register = useRegisterVisitor()
   const toast = useToast()
@@ -77,10 +85,10 @@ export function VisitorsPage() {
         <Table data-testid="visitors-table">
           <Thead>
             <tr>
-              <Th>Visitor</Th>
-              <Th>Host</Th>
-              <Th>Date</Th>
-              <Th>Pass</Th>
+              <SortFilterTh controls={controls} k="visitor">Visitor</SortFilterTh>
+              <SortFilterTh controls={controls} k="host">Host</SortFilterTh>
+              <SortFilterTh controls={controls} k="date">Date</SortFilterTh>
+              <SortFilterTh controls={controls} k="pass">Pass code</SortFilterTh>
               <Th className="text-right">Pass</Th>
             </tr>
           </Thead>

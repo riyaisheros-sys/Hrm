@@ -33,6 +33,8 @@ import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
 import { ColumnChips } from '@/components/ui/ColumnChips'
+import { SortFilterTh } from '@/components/ui/SortFilterTh'
+import { useTableControls } from '@/lib/useTableControls'
 import { useColumnConfig } from '@/lib/useColumnConfig'
 
 export function UsersPage() {
@@ -50,7 +52,16 @@ export function UsersPage() {
   const nameById = new Map(users.map((u) => [u.id, u.full_name || u.email]))
   const deptById = new Map(departments.map((d) => [d.id, d.name]))
   const teamById = new Map(teams.map((t) => [t.id, t.name]))
-  const pagination = usePagination(users, 25)
+  const controls = useTableControls(users, {
+    name: (u) => `${u.full_name ?? ''} ${u.email}`,
+    code: (u) => u.employee_code,
+    department: (u) => (u.department_id ? deptById.get(u.department_id) : ''),
+    team: (u) => (u.team_id ? teamById.get(u.team_id) : ''),
+    manager: (u) => (u.reporting_manager_id ? nameById.get(u.reporting_manager_id) : ''),
+    roles: (u) => u.user_roles.map((ur) => ur.roles?.name ?? '').join(', '),
+    status: (u) => u.status,
+  })
+  const pagination = usePagination(controls.rows, 25, controls.stateKey)
   const USER_COLS = [
     { id: 'sno', label: 'S.No' },
     { id: 'name', label: 'Name' },
@@ -91,14 +102,19 @@ export function UsersPage() {
           <tr>
             {colConfig.visible.map((c) => {
               const color = colConfig.colorOf(c.id)
-              return (
-                <Th
+              return c.id === 'sno' ? (
+                <Th key={c.id} className="w-10" style={color ? { color } : undefined}>
+                  {c.label}
+                </Th>
+              ) : (
+                <SortFilterTh
                   key={c.id}
-                  className={c.id === 'sno' ? 'w-10' : undefined}
+                  controls={controls}
+                  k={c.id}
                   style={color ? { color } : undefined}
                 >
                   {c.label}
-                </Th>
+                </SortFilterTh>
               )
             })}
             {canManage && <Th className="w-10" />}

@@ -37,6 +37,8 @@ import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
+import { SortFilterTh } from '@/components/ui/SortFilterTh'
+import { useTableControls } from '@/lib/useTableControls'
 
 type StatusFilter = '' | 'present' | 'absent' | 'late' | 'overtime' | 'missed'
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
@@ -122,7 +124,20 @@ export function AttendanceMonitorPage() {
         return rows
     }
   }, [rows, notPunched, statusFilter])
-  const pagination = usePagination(filteredRows, 25, `${from}|${to}|${statusFilter}`)
+  const controls = useTableControls(filteredRows, {
+    employee: (r) => r.profiles?.full_name || r.profiles?.email || r.user_id,
+    date: (r) => r.work_date,
+    status: (r) => statusLabel(r.status),
+    worked: (r) => r.worked_minutes ?? 0,
+    firstIn: (r) => r.first_in_at,
+    lastOut: (r) => r.last_out_at,
+    late: (r) => (r.is_late ? (r.late_minutes ?? 0) : 0),
+  })
+  const pagination = usePagination(
+    controls.rows,
+    25,
+    `${from}|${to}|${statusFilter}|${controls.stateKey}`,
+  )
 
   useAttendanceRealtime()
   useCloseStaleAttendance()
@@ -387,13 +402,13 @@ export function AttendanceMonitorPage() {
             <Table data-testid="monitor-table">
               <Thead>
                 <tr>
-                  <Th>Employee</Th>
-                  {multiDay && <Th>Date</Th>}
-                  <Th>Status</Th>
-                  <Th>Worked</Th>
-                  <Th>First In</Th>
-                  <Th>Last Out</Th>
-                  <Th>Late by</Th>
+                  <SortFilterTh controls={controls} k="employee">Employee</SortFilterTh>
+                  {multiDay && <SortFilterTh controls={controls} k="date">Date</SortFilterTh>}
+                  <SortFilterTh controls={controls} k="status">Status</SortFilterTh>
+                  <SortFilterTh controls={controls} k="worked" filterable={false}>Worked</SortFilterTh>
+                  <SortFilterTh controls={controls} k="firstIn" filterable={false}>First In</SortFilterTh>
+                  <SortFilterTh controls={controls} k="lastOut" filterable={false}>Last Out</SortFilterTh>
+                  <SortFilterTh controls={controls} k="late" filterable={false}>Late by</SortFilterTh>
                   <Th>Flags</Th>
                   {canEdit && <Th className="w-px" />}
                 </tr>

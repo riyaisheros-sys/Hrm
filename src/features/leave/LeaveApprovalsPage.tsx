@@ -30,6 +30,8 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
+import { SortFilterTh } from '@/components/ui/SortFilterTh'
+import { useTableControls } from '@/lib/useTableControls'
 import { LeaveDecisionModal } from './LeaveDecisionModal'
 
 const STATUS_TONE = {
@@ -72,8 +74,20 @@ export function LeaveApprovalsPage() {
   const onLeaveToday = approved.filter((r) => r.start_date <= today && r.end_date >= today).length
   const approvedDays = approved.reduce((s, r) => s + Number(r.days), 0)
   const filteredAll = statusFilter === 'all' ? all : all.filter((r) => r.status === statusFilter)
-  const pendingPage = usePagination(pending, 25)
-  const allPage = usePagination(filteredAll, 25, statusFilter)
+  const leaveAccessors = {
+    employee: (r: LeaveRequestRow) => r.requester?.full_name || r.requester?.email,
+    type: (r: LeaveRequestRow) => r.leave_type?.name,
+    from: (r: LeaveRequestRow) => r.start_date,
+    to: (r: LeaveRequestRow) => r.end_date,
+    duration: (r: LeaveRequestRow) =>
+      DURATION_LABEL[(r.duration as LeaveDuration) ?? 'full_day'] ?? 'Full day',
+    days: (r: LeaveRequestRow) => Number(r.days),
+    status: (r: LeaveRequestRow) => r.status,
+  }
+  const pendingControls = useTableControls(pending, leaveAccessors)
+  const allControls = useTableControls(filteredAll, leaveAccessors)
+  const pendingPage = usePagination(pendingControls.rows, 25, pendingControls.stateKey)
+  const allPage = usePagination(allControls.rows, 25, `${statusFilter}|${allControls.stateKey}`)
 
   return (
     <div data-testid="leave-approvals-page">
@@ -93,12 +107,12 @@ export function LeaveApprovalsPage() {
         <Table data-testid="approvals-table">
           <Thead>
             <tr>
-              <Th>Employee</Th>
-              <Th>Type</Th>
-              <Th>From</Th>
-              <Th>To</Th>
-              <Th>Duration</Th>
-              <Th>Days</Th>
+              <SortFilterTh controls={pendingControls} k="employee">Employee</SortFilterTh>
+              <SortFilterTh controls={pendingControls} k="type">Type</SortFilterTh>
+              <SortFilterTh controls={pendingControls} k="from">From</SortFilterTh>
+              <SortFilterTh controls={pendingControls} k="to">To</SortFilterTh>
+              <SortFilterTh controls={pendingControls} k="duration">Duration</SortFilterTh>
+              <SortFilterTh controls={pendingControls} k="days" filterable={false}>Days</SortFilterTh>
               <Th className="text-right">Decision</Th>
             </tr>
           </Thead>
@@ -167,13 +181,13 @@ export function LeaveApprovalsPage() {
           <Table data-testid="all-leave-table">
             <Thead>
               <tr>
-                <Th>Employee</Th>
-                <Th>Type</Th>
-                <Th>From</Th>
-                <Th>To</Th>
-                <Th>Duration</Th>
-                <Th>Days</Th>
-                <Th>Status</Th>
+                <SortFilterTh controls={allControls} k="employee">Employee</SortFilterTh>
+                <SortFilterTh controls={allControls} k="type">Type</SortFilterTh>
+                <SortFilterTh controls={allControls} k="from">From</SortFilterTh>
+                <SortFilterTh controls={allControls} k="to">To</SortFilterTh>
+                <SortFilterTh controls={allControls} k="duration">Duration</SortFilterTh>
+                <SortFilterTh controls={allControls} k="days" filterable={false}>Days</SortFilterTh>
+                <SortFilterTh controls={allControls} k="status">Status</SortFilterTh>
                 <Th>Admin remark</Th>
                 <Th className="w-px" />
               </tr>

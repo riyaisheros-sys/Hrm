@@ -3,6 +3,7 @@ import { Download, History, Pencil, Plus, Settings2, Trash2, Upload } from 'luci
 import {
   getDocumentUrl,
   useDeleteDocument,
+  useAllEmployeeDocuments,
   useDeleteDocumentType,
   useDocumentTypes,
   useEmployeeDocuments,
@@ -219,6 +220,16 @@ export function DocumentsPage() {
 
         <JoiningChecklist employeeId={effectiveUser} />
       </div>
+
+      <DocumentsByEmployee
+        users={users}
+        typeNames={new Map(documentTypes.map((t) => [t.code, t.name]))}
+        selectedId={effectiveUser}
+        onSelect={(id) => {
+          setEmployeeId(id)
+          document.querySelector('[data-testid="app-main"]')?.scrollTo({ top: 0, behavior: 'smooth' })
+        }}
+      />
 
       {deleting && (
         <Modal
@@ -444,6 +455,163 @@ function JoiningChecklist({ employeeId }: { employeeId: string }) {
             ))}
           </ul>
         )}
+      </CardBody>
+    </Card>
+  )
+}
+
+/**
+ * Admin overview: one row per employee with every document they have on file
+ * (latest version of each type). Click a document to open it, or "View" to
+ * load that employee in the vault above. Employees with nothing uploaded are
+ * listed too, so gaps are visible at a glance.
+ */
+function DocumentsByEmployee({
+  users,
+  typeNames,
+  selectedId,
+  onSelect,
+}: {
+  users: Array<{ id: string; full_name: string; email: string; employee_code: string | null }>
+  typeNames: Map<string, string>
+  selectedId: string
+  onSelect: (id: string) => void
+}) {
+  const { data: all = [], isLoading } = useAllEmployeeDocuments()
+  const toast = useToast()
+  const [search, setSearch] = useState('')
+  const [only, setOnly] = useState<'all' | 'with' | 'without'>('all')
+
+  const rows = useMemo(() => {
+    const byEmployee = new Map<string, EmployeeDocument[]>()
+    for (const doc of all) {
+      const list = byEmployee.get(doc.employee_id) ?? []
+      // `all` is newest-first, so the first one seen per type is the latest.
+      if (!list.some((d) => d.doc_type === doc.doc_type)) list.push(doc)
+      byEmployee.set(doc.employee_id, list)
+    }
+    const q = search.trim().toLowerCase()
+    return users
+      .map((u) => ({ user: u, docs: byEmployee.get(u.id) ?? [] }))
+      .filter(({ user, docs }) => {
+        if (only === 'with' && docs.length === 0) return false
+        if (only === 'without' && docs.length > 0) return false
+        if (!q) return true
+        return [user.full_name, user.email, user.employee_code ?? '', ...docs.map((d) => d.title)]
+          .join(' ')
+          .toLowerCase()
+          .includes(q)
+      })
+      .sort((a, b) =>
+        (a.user.full_name || a.user.email).localeCompare(b.user.full_name || b.user.email),
+      )
+  }, [all, users, search, only])
+  const page = usePagination(rows, 25, `${search}|${only}`)
+
+  return (
+    <Card className="mt-6">
+      <CardBody data-testid="documents-by-employee">
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">Uploaded documents by employee</h2>
+            <p className="text-xs text-slate-500">
+              {all.length} file{all.length === 1 ? '' : 's'} on record across {users.length}{' '}
+              employees. Click a document to open it.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <Input
+              data-testid="docs-by-employee-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search employee or document"
+              className="w-56"
+            />
+            <Select
+              data-testid="docs-by-employee-filter"
+              value={only}
+              onChange={(e) => setOnly(e.target.value as 'all' | 'with' | 'without')}
+              className="w-44"
+            >
+              <option value="all">All employees</option>
+              <option value="with">With documents</option>
+              <option value="without">Nothing uploaded</option>
+            </Select>
+          </div>
+        </div>
+        {isLoading ? (
+          <p className="text-sm text-slate-500">Loading…</p>
+        ) : rows.length === 0 ? (
+          <EmptyState title="No employees match" testid="docs-by-employee-empty" />
+        ) : (
+          <Table data-testid="docs-by-employee-table">
+            <Thead>
+              <tr>
+                <Th className="w-10">S.No</Th>
+                <Th>Employee</Th>
+                <Th>Documents on file</Th>
+                <Th>Last upload</Th>
+                <Th className="w-px" />
+              </tr>
+            </Thead>
+            <Tbody>
+              {page.pagedItems.map(({ user, docs }, i) => (
+                <tr
+                  key={user.id}
+                  data-testid="docs-by-employee-row"
+                  className={user.id === selectedId ? 'bg-brand-50/40' : undefined}
+                >
+                  <Td className="text-xs text-slate-400 tabular-nums">{page.pageStart + i + 1}</Td>
+                  <Td className="font-medium text-slate-900">
+                    {user.full_name || user.email}
+                    <div className="text-xs font-normal text-slate-500">
+                      {user.employee_code ? `${user.employee_code} · ` : ''}
+                      {user.email}
+                    </div>
+                  </Td>
+                  <Td>
+                    {docs.length === 0 ? (
+                      <span className="text-xs text-slate-400">Nothing uploaded</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {docs.map((d) => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            title={`${d.title} · v${d.version} — click to open`}
+                            className="hover:border-brand-300 hover:text-brand-700 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700"
+                            onClick={async () => {
+                              const url = await getDocumentUrl(d.id, d.storage_path)
+                              if (url) window.open(url, '_blank')
+                              else toast.error('Could not open document')
+                            }}
+                          >
+                            <Download className="size-3" />
+                            {typeNames.get(d.doc_type) ?? d.doc_type}
+                            <span className="text-slate-400">v{d.version}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </Td>
+                  <Td className="text-xs whitespace-nowrap text-slate-500">
+                    {docs.length
+                      ? new Date(
+                          Math.max(...docs.map((d) => new Date(d.created_at).getTime())),
+                        ).toLocaleDateString()
+                      : '—'}
+                  </Td>
+                  <Td>
+                    <Button size="sm" variant="outline" onClick={() => onSelect(user.id)}>
+                      View
+                    </Button>
+                  </Td>
+                </tr>
+              ))}
+            </Tbody>
+          </Table>
+        )}
+        <Pagination {...page} testid="docs-by-employee-pagination" />
       </CardBody>
     </Card>
   )

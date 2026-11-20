@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { usePagination } from '@/lib/usePagination'
 import { Pagination } from '@/components/ui/Pagination'
+import { SortFilterTh } from '@/components/ui/SortFilterTh'
+import { useTableControls } from '@/lib/useTableControls'
 import { Check, CheckCheck, ChevronDown, ChevronRight, Eye, EyeOff, FolderOpen, History, MessageSquarePlus, Pencil, Plus, Send, Settings2, Trash2, Undo2, Users as UsersIcon, X } from 'lucide-react'
 import {
   useCreateStatus,
@@ -139,14 +141,27 @@ export function TasksPage() {
   // single parent row in "All tasks" so the list doesn't repeat the same title
   // N times. "My tasks" stays flat because each person only sees their copy.
   const [expandedBulks, setExpandedBulks] = useState<Set<string>>(new Set())
+  // Heading sort / per-column filter run on the task rows first; bulk groups
+  // are then formed from whatever survives, in the sorted order.
+  const controls = useTableControls(visible, {
+    title: (t) => t.title,
+    assignee: (t) => t.assignee?.full_name || t.assignee?.email || 'Unassigned',
+    creator: (t) => t.creator?.full_name || t.creator?.email,
+    created: (t) => t.created_at,
+    completed: (t) => t.completed_at,
+    priority: (t) => ({ low: 1, medium: 2, high: 3 })[t.priority as 'low' | 'medium' | 'high'] ?? 0,
+    progress: (t) => t.progress_percent,
+    status: (t) => styleForStatus(t.status?.slug).label,
+  })
+  const tableTasks = controls.rows
   const displayItems = useMemo<DisplayItem[]>(() => {
-    if (filter !== 'all') return visible.map((task) => ({ kind: 'single' as const, task }))
+    if (filter !== 'all') return tableTasks.map((task) => ({ kind: 'single' as const, task }))
     const items: DisplayItem[] = []
     const seen = new Set<string>()
-    for (const t of visible) {
+    for (const t of tableTasks) {
       if (t.bulk_key) {
         if (seen.has(t.bulk_key)) continue
-        const siblings = visible.filter((x) => x.bulk_key === t.bulk_key)
+        const siblings = tableTasks.filter((x) => x.bulk_key === t.bulk_key)
         if (siblings.length > 1) {
           items.push({ kind: 'bulk', key: t.bulk_key, tasks: siblings })
           seen.add(t.bulk_key)
@@ -156,7 +171,7 @@ export function TasksPage() {
       items.push({ kind: 'single', task: t })
     }
     return items
-  }, [visible, filter])
+  }, [tableTasks, filter])
   function toggleBulk(key: string) {
     setExpandedBulks((prev) => {
       const next = new Set(prev)
@@ -170,7 +185,7 @@ export function TasksPage() {
   const pagination = usePagination(
     displayItems,
     25,
-    `${filter}|${assignorFilter}|${assigneeFilter}|${statusFilter}|${showCompleted}`,
+    `${filter}|${assignorFilter}|${assigneeFilter}|${statusFilter}|${showCompleted}|${controls.stateKey}`,
   )
   const { pagedItems, pageStart } = pagination
 
@@ -471,14 +486,16 @@ export function TasksPage() {
           <Thead>
             <tr>
               <Th className="sticky left-0 z-20 w-10 bg-slate-50">S.No</Th>
-              <Th className="sticky left-10 z-20 bg-slate-50">Task</Th>
-              <Th>Assignee</Th>
-              <Th>Created by</Th>
-              <Th>Created</Th>
-              <Th>Completed</Th>
-              <Th>Priority</Th>
-              <Th>Progress</Th>
-              <Th>Status</Th>
+              <SortFilterTh controls={controls} k="title" className="left-10 z-20">
+                Task
+              </SortFilterTh>
+              <SortFilterTh controls={controls} k="assignee">Assignee</SortFilterTh>
+              <SortFilterTh controls={controls} k="creator">Created by</SortFilterTh>
+              <SortFilterTh controls={controls} k="created" filterable={false}>Created</SortFilterTh>
+              <SortFilterTh controls={controls} k="completed" filterable={false}>Completed</SortFilterTh>
+              <SortFilterTh controls={controls} k="priority" filterable={false}>Priority</SortFilterTh>
+              <SortFilterTh controls={controls} k="progress" filterable={false}>Progress</SortFilterTh>
+              <SortFilterTh controls={controls} k="status">Status</SortFilterTh>
               <Th className="sticky right-0 z-20 w-px bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" />
             </tr>
           </Thead>

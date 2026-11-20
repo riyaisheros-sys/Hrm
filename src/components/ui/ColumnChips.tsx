@@ -43,6 +43,10 @@ export function ColumnChips({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  // The panel normally hangs from the button's right edge. When the button
+  // sits near the left of the content area that would push the panel under
+  // the sidebar, so in that case it hangs from the left edge instead.
+  const [alignLeft, setAlignLeft] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
@@ -69,7 +73,13 @@ export function ColumnChips({
       <button
         type="button"
         data-testid={`${testid}-button`}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          const rect = panelRef.current?.getBoundingClientRect()
+          const main = document.querySelector('[data-testid="app-main"]')?.getBoundingClientRect()
+          const panelWidth = Math.min(window.innerWidth * 0.9, 512)
+          if (rect) setAlignLeft(rect.right - panelWidth < (main?.left ?? 0) + 8)
+          setOpen((v) => !v)
+        }}
         className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
       >
         <Columns3 className="size-4" />
@@ -81,7 +91,11 @@ export function ColumnChips({
       </button>
       {!open ? null : (
       <div
-        className="absolute right-0 z-30 mt-2 w-[min(90vw,32rem)] rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-lg"
+        data-testid={`${testid}-panel`}
+        className={cn(
+          'absolute z-30 mt-2 w-[min(90vw,32rem)] rounded-lg border border-slate-200 bg-slate-50 p-3 shadow-lg',
+          alignLeft ? 'left-0' : 'right-0',
+        )}
       >
       <div className="mb-2 flex items-center justify-between">
         <p className="text-sm font-medium text-slate-700">{title}</p>
