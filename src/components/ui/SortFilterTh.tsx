@@ -48,7 +48,7 @@ export function SortFilterTh<T>({
           data-testid={`sort-${k}`}
           onClick={() => controls.toggleSort(k)}
           title="Sort"
-          className="inline-flex items-center gap-1 uppercase tracking-wide hover:opacity-75"
+          className="inline-flex items-center gap-1 uppercase tracking-wide hover:text-slate-900"
         >
           {children}
           {dir === 'asc' ? (
@@ -56,7 +56,7 @@ export function SortFilterTh<T>({
           ) : dir === 'desc' ? (
             <ArrowDown className="size-3" />
           ) : (
-            <ArrowUpDown className="size-3 opacity-40" />
+            <ArrowUpDown className="size-3 text-slate-300" />
           )}
         </button>
         {filterable && (
@@ -67,16 +67,15 @@ export function SortFilterTh<T>({
             title={filter ? `Filter: ${filter}` : 'Filter this column'}
             onClick={() => setOpen((v) => !v)}
             className={cn(
-              'rounded p-0.5',
-              // Opacity, not a fixed grey, so the icon reads on any heading colour.
-              filter ? 'bg-white text-brand-600' : 'opacity-50 hover:opacity-100',
+              'rounded p-0.5 hover:bg-slate-200',
+              filter ? 'text-brand-600' : 'text-slate-300 hover:text-slate-600',
             )}
           >
             <Filter className="size-3" />
           </button>
         )}
         {open && (
-          <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-md border border-slate-200 bg-white p-2 text-slate-700 shadow-lg">
+          <div className="absolute left-0 top-full z-30 mt-1 w-48 rounded-md border border-slate-200 bg-white p-2 shadow-lg">
             <input
               ref={inputRef}
               data-testid={`filter-input-${k}`}

@@ -71,7 +71,6 @@ export function AttendanceRegister({
                 <th
                   key={d}
                   title={holidayNames.get(d)}
-                  data-keep-colour={isSunday(d) || holidayNames.has(d) ? '' : undefined}
                   className={cn(
                     'min-w-7 px-1 py-2 text-center font-semibold',
                     isSunday(d) && SUNDAY_META.className,

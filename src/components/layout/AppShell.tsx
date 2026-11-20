@@ -41,7 +41,6 @@ import { useViewMode } from '@/features/view-mode/view-mode-context'
 import { HealthBadge } from '@/features/health/HealthBadge'
 import { SidebarCustomizer } from './SidebarCustomizer'
 import { useSidebarPreferences } from './sidebar-preferences'
-import { useApplyHeadingColour } from '@/lib/appearance'
 import {
   groupForNav,
   isMastersOnlyRoute,
@@ -287,7 +286,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Setup pages live behind Centralized Masters for anyone who can open it.
   const viaMasters = mode === 'admin' && hasPermission(MASTERS_PERMISSION)
   const { pathname } = useLocation()
-  useApplyHeadingColour()
   const onMastersPage = viaMasters && isMastersOnlyRoute(pathname)
   const permittedItems = (mode === 'admin' ? adminNav : employeeNav)
     .filter((item) => !item.perm || hasPermission(item.perm))

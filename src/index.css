@@ -32,14 +32,3 @@
     @apply outline-none ring-2 ring-brand-500 ring-offset-2;
   }
 }
-
-/*
- * Platform-wide table heading colour, chosen in Centralized Masters.
- * Left outside any layer on purpose: it then wins over the utility classes on
- * every table heading, while a per-heading colour set inline still wins over it.
- * Cells that carry their own meaning (Sunday / holiday) opt out.
- */
-:root[data-table-head] thead th:not([data-keep-colour]) {
-  background-color: var(--table-head-bg);
-  color: var(--table-head-text);
-}

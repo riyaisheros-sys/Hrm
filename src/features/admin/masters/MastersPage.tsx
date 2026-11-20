@@ -28,8 +28,9 @@ import { Card, CardBody } from '@/components/ui/Card'
 import { Modal } from '@/components/ui/Modal'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { useToast } from '@/components/ui/toast-context'
-import { HeadingColourCard } from './HeadingColourCard'
 import { formatDateTime } from '@/lib/format'
+import { ColumnChips } from '@/components/ui/ColumnChips'
+import { useColumnConfig } from '@/lib/useColumnConfig'
 
 /**
  * Every master lives in exactly one module. The UI groups them by module so
@@ -55,29 +56,77 @@ type LinkedMaster = {
 
 const KINDS: Array<SimpleMaster | LinkedMaster> = [
   // People
-  { kind: 'linked', module: 'People', label: 'Users / Employees', href: '/admin/users', note: 'Add, edit, roles, KRA / KPI, leave quota' },
+  {
+    kind: 'linked',
+    module: 'People',
+    label: 'Users / Employees',
+    href: '/admin/users',
+    note: 'Add, edit, roles, KRA / KPI, leave quota',
+  },
   { kind: 'linked', module: 'People', label: 'Companies', href: '/admin/hierarchy' },
   { kind: 'linked', module: 'People', label: 'Departments', href: '/admin/hierarchy' },
   { kind: 'linked', module: 'People', label: 'Teams', href: '/admin/hierarchy' },
   { kind: 'linked', module: 'People', label: 'Organization Roles & Access', href: '/admin/roles' },
-  { kind: 'linked', module: 'People', label: 'Employee Panel', href: '/admin/employee-panel', note: 'What employees see in entries & dashboard' },
+  {
+    kind: 'linked',
+    module: 'People',
+    label: 'Employee Panel',
+    href: '/admin/employee-panel',
+    note: 'What employees see in entries & dashboard',
+  },
   { kind: 'linked', module: 'People', label: 'Lifecycle', href: '/admin/lifecycle' },
 
   // Tasks
   { kind: 'simple', value: 'task_categories', label: 'Task Groups', module: 'Tasks' },
   { kind: 'linked', module: 'Tasks', label: 'Tasks', href: '/tasks' },
-  { kind: 'linked', module: 'Tasks', label: 'Task Statuses', href: '/tasks', note: 'Open Tasks → Statuses dialog' },
-  { kind: 'linked', module: 'Tasks', label: 'Task capacity', href: '/tasks', note: 'Open Tasks → Statuses dialog' },
+  {
+    kind: 'linked',
+    module: 'Tasks',
+    label: 'Task Statuses',
+    href: '/tasks',
+    note: 'Open Tasks → Statuses dialog',
+  },
+  {
+    kind: 'linked',
+    module: 'Tasks',
+    label: 'Task capacity',
+    href: '/tasks',
+    note: 'Open Tasks → Statuses dialog',
+  },
 
   // Attendance
   { kind: 'linked', module: 'Attendance', label: 'Attendance Monitor', href: '/admin/attendance' },
-  { kind: 'linked', module: 'Attendance', label: 'Locations (geo-fence)', href: '/admin/attendance', note: 'Attendance Monitor → Locations' },
-  { kind: 'linked', module: 'Attendance', label: 'Attendance Settings', href: '/admin/attendance-settings', note: 'Working hours, lunch, day thresholds, grace, geo-fence' },
+  {
+    kind: 'linked',
+    module: 'Attendance',
+    label: 'Locations (geo-fence)',
+    href: '/admin/attendance',
+    note: 'Attendance Monitor → Locations',
+  },
+  {
+    kind: 'linked',
+    module: 'Attendance',
+    label: 'Attendance Settings',
+    href: '/admin/attendance-settings',
+    note: 'Working hours, lunch, day thresholds, grace, geo-fence',
+  },
   { kind: 'linked', module: 'Attendance', label: 'Monitoring', href: '/admin/monitoring' },
 
   // Planning
-  { kind: 'linked', module: 'Planning', label: 'Planning monitor', href: '/admin/planning', note: 'Slots, punch locks and admin unlocks' },
-  { kind: 'linked', module: 'Planning', label: 'Planning config', href: '/admin/planning', note: 'Slot interval and working window' },
+  {
+    kind: 'linked',
+    module: 'Planning',
+    label: 'Planning monitor',
+    href: '/admin/planning',
+    note: 'Slots, punch locks and admin unlocks',
+  },
+  {
+    kind: 'linked',
+    module: 'Planning',
+    label: 'Planning config',
+    href: '/admin/planning',
+    note: 'Slot interval and working window',
+  },
 
   // Leave
   { kind: 'simple', value: 'leave_types', label: 'Leave Types', module: 'Leave' },
@@ -88,7 +137,12 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   { kind: 'simple', value: 'appraisal_types', label: 'Appraisal Types', module: 'Performance' },
   { kind: 'linked', module: 'Performance', label: 'KRA master', href: '/admin/kra-kpi' },
   { kind: 'linked', module: 'Performance', label: 'KPI master', href: '/admin/kra-kpi' },
-  { kind: 'linked', module: 'Performance', label: 'Designations & default KRA / KPI', href: '/admin/kra-kpi' },
+  {
+    kind: 'linked',
+    module: 'Performance',
+    label: 'Designations & default KRA / KPI',
+    href: '/admin/kra-kpi',
+  },
   { kind: 'linked', module: 'Performance', label: 'Appraisal Cycles', href: '/admin/appraisal' },
   { kind: 'linked', module: 'Performance', label: 'Appraisals', href: '/admin/appraisal' },
 
@@ -99,7 +153,12 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   { kind: 'linked', module: 'Policies', label: 'Policies', href: '/admin/policies' },
 
   // Helpdesk
-  { kind: 'simple', value: 'helpdesk_categories', label: 'Helpdesk Categories', module: 'Helpdesk' },
+  {
+    kind: 'simple',
+    value: 'helpdesk_categories',
+    label: 'Helpdesk Categories',
+    module: 'Helpdesk',
+  },
   { kind: 'linked', module: 'Helpdesk', label: 'Helpdesk tickets', href: '/helpdesk' },
 
   // Compensation
@@ -109,7 +168,12 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
 
   // Workflow / Processes
   { kind: 'linked', module: 'Workflow', label: 'Workflow Definitions', href: '/admin/workflows' },
-  { kind: 'linked', module: 'Workflow', label: 'Communication Templates', href: '/admin/onboarding' },
+  {
+    kind: 'linked',
+    module: 'Workflow',
+    label: 'Communication Templates',
+    href: '/admin/onboarding',
+  },
 
   // Training
   { kind: 'linked', module: 'Training', label: 'Training Modules', href: '/admin/training' },
@@ -119,7 +183,13 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   { kind: 'linked', module: 'Recruitment', label: 'Candidates', href: '/admin/recruitment' },
 
   // Assets
-  { kind: 'linked', module: 'Assets', label: 'Assets', href: '/admin/assets', note: 'Inventory and assignment history' },
+  {
+    kind: 'linked',
+    module: 'Assets',
+    label: 'Assets',
+    href: '/admin/assets',
+    note: 'Inventory and assignment history',
+  },
 
   // Engagement
   { kind: 'linked', module: 'Engagement', label: 'Recognition', href: '/recognition' },
@@ -132,9 +202,7 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   { kind: 'linked', module: 'Reports & System', label: 'Dashboard', href: '/' },
 ]
 
-const SIMPLE_KINDS = KINDS.filter(
-  (k): k is SimpleMaster => k.kind === 'simple',
-)
+const SIMPLE_KINDS = KINDS.filter((k): k is SimpleMaster => k.kind === 'simple')
 
 // Preserve the module order in which they first appear above.
 const MODULES: string[] = []
@@ -156,12 +224,21 @@ interface PendingChange {
   discard?: () => void
 }
 
+const MASTER_COLS = [
+  { id: 'sequence', label: 'Sequence' },
+  { id: 'name', label: 'Name' },
+  { id: 'status', label: 'Status' },
+  { id: 'actions', label: 'Actions' },
+]
+
 export function MastersPage() {
   const [kind, setKind] = useState<MasterKind>('task_categories')
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<MasterItem | null>(null)
   const [name, setName] = useState('')
   const [draggedId, setDraggedId] = useState<string | null>(null)
+  // Display headings: show / hide, re-order and colour the table headings.
+  const colConfig = useColumnConfig('masters', MASTER_COLS)
   const importRef = useRef<HTMLInputElement>(null)
   const { data: items = [] } = useMasterItems(kind)
   const { data: audit = [] } = useMasterAudit()
@@ -330,8 +407,6 @@ export function MastersPage() {
         }
       />
 
-      <HeadingColourCard />
-
       <div
         data-testid="master-module-map"
         className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-2 lg:grid-cols-3"
@@ -339,10 +414,11 @@ export function MastersPage() {
         {MODULES.map((mod) => {
           const children = KINDS.filter((k) => k.module === mod)
           return (
-            <div key={mod} data-testid={`master-module-${mod.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}>
-              <div className="mb-1 font-semibold uppercase tracking-wide text-slate-500">
-                {mod}
-              </div>
+            <div
+              key={mod}
+              data-testid={`master-module-${mod.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+            >
+              <div className="mb-1 font-semibold tracking-wide text-slate-500 uppercase">{mod}</div>
               <ul className="space-y-1">
                 {children.map((child) =>
                   child.kind === 'simple' ? (
@@ -355,7 +431,7 @@ export function MastersPage() {
                           'w-full rounded-md border px-2 py-1 text-left ' +
                           (kind === child.value
                             ? 'border-brand-400 bg-brand-100 text-brand-800'
-                            : 'border-slate-200 bg-white text-slate-700 hover:border-brand-300 hover:text-brand-700')
+                            : 'hover:border-brand-300 hover:text-brand-700 border-slate-200 bg-white text-slate-700')
                         }
                       >
                         <span className="font-medium">{child.label}</span>
@@ -367,7 +443,7 @@ export function MastersPage() {
                       <Link
                         to={child.href}
                         data-testid={`master-link-${child.label.toLowerCase().replace(/\s+/g, '-')}`}
-                        className="block w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:border-brand-300 hover:text-brand-700"
+                        className="hover:border-brand-300 hover:text-brand-700 block w-full rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700"
                       >
                         <span className="font-medium">{child.label}</span>
                         <span className="float-right text-slate-400">open manager →</span>
@@ -390,17 +466,15 @@ export function MastersPage() {
           value={kind}
           onChange={(event) => switchKind(event.target.value as MasterKind)}
         >
-          {MODULES.filter((mod) => SIMPLE_KINDS.some((k) => k.module === mod)).map(
-            (mod) => (
-              <optgroup key={mod} label={mod}>
-                {SIMPLE_KINDS.filter((k) => k.module === mod).map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </optgroup>
-            ),
-          )}
+          {MODULES.filter((mod) => SIMPLE_KINDS.some((k) => k.module === mod)).map((mod) => (
+            <optgroup key={mod} label={mod}>
+              {SIMPLE_KINDS.filter((k) => k.module === mod).map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
         </Select>
         <Input
           value={search}
@@ -465,152 +539,178 @@ export function MastersPage() {
         </CardBody>
       </Card>
 
-      <Table>
+      <ColumnChips config={colConfig} title="Display headings" testid="masters-chips" />
+
+      <Table data-testid="masters-table">
         <Thead>
           <tr>
-            <Th>Sequence</Th>
-            <Th>Name</Th>
-            <Th>Status</Th>
-            <Th className="text-right">Actions</Th>
+            {colConfig.visible.map((c) => {
+              const color = colConfig.colorOf(c.id)
+              return (
+                <Th
+                  key={c.id}
+                  className={c.id === 'actions' ? 'text-right' : undefined}
+                  style={color ? { color } : undefined}
+                >
+                  {c.label}
+                </Th>
+              )
+            })}
           </tr>
         </Thead>
         <Tbody>
-          {filtered.map((item) => (
-            <tr
-              key={item.id}
-              draggable
-              onDragStart={() => setDraggedId(item.id)}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => {
-                if (!draggedId || draggedId === item.id) return
-                const next = [...items]
-                const from = next.findIndex((entry) => entry.id === draggedId)
-                const to = next.findIndex((entry) => entry.id === item.id)
-                const [moved] = next.splice(from, 1)
-                next.splice(to, 0, moved)
-                setDraggedId(null)
-                setPending({
-                  title: 'Change sequence',
-                  message: (
-                    <p>
-                      Move <span className="font-semibold text-slate-900">{moved.name}</span> to
-                      position {to + 1} in {kindLabel}?
-                    </p>
-                  ),
-                  confirmLabel: 'Save',
-                  run: async () => {
-                    await reorder.mutateAsync(next)
-                    toast.success('Sequence updated')
-                  },
-                })
-              }}
-            >
-              <Td>
-                <span className="flex items-center gap-2">
-                  <GripVertical className="size-4 text-slate-400" />
-                  <Input
-                    key={`${item.id}-${item.sort_order}`}
-                    aria-label={`Sequence for ${item.name}`}
-                    type="number"
-                    min={1}
-                    defaultValue={item.sort_order}
-                    className="h-8 w-20"
-                    onClick={(event) => event.stopPropagation()}
-                    onBlur={(event) => {
-                      const next = Number(event.target.value)
-                      if (!Number.isInteger(next) || next < 1 || next === item.sort_order) {
-                        event.target.value = String(item.sort_order)
-                        return
-                      }
-                      const field = event.target
+          {filtered.map((item) => {
+            const cells: Record<string, ReactNode> = {
+              sequence: (
+                <Td key="sequence">
+                  <span className="flex items-center gap-2">
+                    <GripVertical className="size-4 text-slate-400" />
+                    <Input
+                      key={`${item.id}-${item.sort_order}`}
+                      aria-label={`Sequence for ${item.name}`}
+                      type="number"
+                      min={1}
+                      defaultValue={item.sort_order}
+                      className="h-8 w-20"
+                      onClick={(event) => event.stopPropagation()}
+                      onBlur={(event) => {
+                        const next = Number(event.target.value)
+                        if (!Number.isInteger(next) || next < 1 || next === item.sort_order) {
+                          event.target.value = String(item.sort_order)
+                          return
+                        }
+                        const field = event.target
+                        setPending({
+                          title: 'Change sequence',
+                          message: (
+                            <p>
+                              Change the sequence of{' '}
+                              <span className="font-semibold text-slate-900">{item.name}</span> from{' '}
+                              {item.sort_order} to {next}?
+                            </p>
+                          ),
+                          confirmLabel: 'Save',
+                          run: async () => {
+                            await save.mutateAsync({ ...item, sort_order: next })
+                            toast.success('Sequence updated')
+                          },
+                          onCancel: () => {
+                            field.value = String(item.sort_order)
+                          },
+                        })
+                      }}
+                    />
+                  </span>
+                </Td>
+              ),
+              name: (
+                <Td key="name" className="font-medium">
+                  {item.name}
+                </Td>
+              ),
+              status: (
+                <Td key="status">
+                  <button
+                    aria-label={`Toggle status of ${item.name}`}
+                    onClick={() =>
                       setPending({
-                        title: 'Change sequence',
+                        title: item.is_active ? 'Deactivate item' : 'Activate item',
                         message: (
                           <p>
-                            Change the sequence of{' '}
-                            <span className="font-semibold text-slate-900">{item.name}</span> from{' '}
-                            {item.sort_order} to {next}?
+                            Mark <span className="font-semibold text-slate-900">{item.name}</span>{' '}
+                            as {item.is_active ? 'Inactive' : 'Active'}?
+                            {item.is_active &&
+                              ' It will stop appearing in dropdowns until it is activated again.'}
                           </p>
                         ),
                         confirmLabel: 'Save',
                         run: async () => {
-                          await save.mutateAsync({ ...item, sort_order: next })
-                          toast.success('Sequence updated')
-                        },
-                        onCancel: () => {
-                          field.value = String(item.sort_order)
-                        },
-                      })
-                    }}
-                  />
-                </span>
-              </Td>
-              <Td className="font-medium">{item.name}</Td>
-              <Td>
-                <button
-                  aria-label={`Toggle status of ${item.name}`}
-                  onClick={() =>
-                    setPending({
-                      title: item.is_active ? 'Deactivate item' : 'Activate item',
-                      message: (
-                        <p>
-                          Mark <span className="font-semibold text-slate-900">{item.name}</span> as{' '}
-                          {item.is_active ? 'Inactive' : 'Active'}?
-                          {item.is_active &&
-                            ' It will stop appearing in dropdowns until it is activated again.'}
-                        </p>
-                      ),
-                      confirmLabel: 'Save',
-                      run: async () => {
-                        await save.mutateAsync({ ...item, is_active: !item.is_active })
-                        toast.success(item.is_active ? 'Marked inactive' : 'Marked active')
-                      },
-                    })
-                  }
-                >
-                  <Badge tone={item.is_active ? 'green' : 'slate'}>
-                    {item.is_active ? 'Active' : 'Inactive'}
-                  </Badge>
-                </button>
-              </Td>
-              <Td>
-                <div className="flex justify-end gap-2">
-                  <button
-                    onClick={() => {
-                      setEditing(item)
-                      setName(item.name)
-                    }}
-                    aria-label={`Edit ${item.name}`}
-                  >
-                    <Pencil className="size-4" />
-                  </button>
-                  <button
-                    onClick={() =>
-                      setPending({
-                        title: 'Delete item',
-                        message: (
-                          <p>
-                            Delete <span className="font-semibold text-slate-900">{item.name}</span>{' '}
-                            from {kindLabel}? This cannot be undone.
-                          </p>
-                        ),
-                        confirmLabel: 'Delete',
-                        danger: true,
-                        run: async () => {
-                          await remove.mutateAsync(item.id)
-                          toast.success('Master deleted')
+                          await save.mutateAsync({ ...item, is_active: !item.is_active })
+                          toast.success(item.is_active ? 'Marked inactive' : 'Marked active')
                         },
                       })
                     }
-                    aria-label={`Delete ${item.name}`}
-                    className="text-red-500"
                   >
-                    <Trash2 className="size-4" />
+                    <Badge tone={item.is_active ? 'green' : 'slate'}>
+                      {item.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
                   </button>
-                </div>
-              </Td>
-            </tr>
-          ))}
+                </Td>
+              ),
+              actions: (
+                <Td key="actions">
+                  <div className="flex justify-end gap-2">
+                    <button
+                      onClick={() => {
+                        setEditing(item)
+                        setName(item.name)
+                      }}
+                      aria-label={`Edit ${item.name}`}
+                    >
+                      <Pencil className="size-4" />
+                    </button>
+                    <button
+                      onClick={() =>
+                        setPending({
+                          title: 'Delete item',
+                          message: (
+                            <p>
+                              Delete{' '}
+                              <span className="font-semibold text-slate-900">{item.name}</span> from{' '}
+                              {kindLabel}? This cannot be undone.
+                            </p>
+                          ),
+                          confirmLabel: 'Delete',
+                          danger: true,
+                          run: async () => {
+                            await remove.mutateAsync(item.id)
+                            toast.success('Master deleted')
+                          },
+                        })
+                      }
+                      aria-label={`Delete ${item.name}`}
+                      className="text-red-500"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+                </Td>
+              ),
+            }
+            return (
+              <tr
+                key={item.id}
+                draggable
+                onDragStart={() => setDraggedId(item.id)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => {
+                  if (!draggedId || draggedId === item.id) return
+                  const next = [...items]
+                  const from = next.findIndex((entry) => entry.id === draggedId)
+                  const to = next.findIndex((entry) => entry.id === item.id)
+                  const [moved] = next.splice(from, 1)
+                  next.splice(to, 0, moved)
+                  setDraggedId(null)
+                  setPending({
+                    title: 'Change sequence',
+                    message: (
+                      <p>
+                        Move <span className="font-semibold text-slate-900">{moved.name}</span> to
+                        position {to + 1} in {kindLabel}?
+                      </p>
+                    ),
+                    confirmLabel: 'Save',
+                    run: async () => {
+                      await reorder.mutateAsync(next)
+                      toast.success('Sequence updated')
+                    },
+                  })
+                }}
+              >
+                {colConfig.visible.map((c) => cells[c.id])}
+              </tr>
+            )
+          })}
         </Tbody>
       </Table>
 
