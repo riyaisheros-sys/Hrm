@@ -1,7 +1,7 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { FileSpreadsheet, FileText, X } from 'lucide-react'
 import { REPORT_LABELS, useAllowedReportFields, useReport, type ReportType } from './hooks'
-import { exportExcel, exportPdf, type CellFill } from './export'
+import { exportExcel, exportPdf, type CellFill, type ExtraTable } from './export'
 import { ATTENDANCE_STATUS, LEGEND, SUNDAY_META } from '@/features/attendance/status'
 import { Badge } from '@/components/ui/Badge'
 import { useUsers } from '@/features/admin/users/hooks'
@@ -10,6 +10,8 @@ import { ColumnChips } from '@/components/ui/ColumnChips'
 import { useColumnConfig } from '@/lib/useColumnConfig'
 import { usePersistedState } from '@/lib/usePersistedState'
 import { StickyHeader } from '@/components/ui/StickyHeader'
+import { Modal } from '@/components/ui/Modal'
+import { formatDate, formatDateTime } from '@/lib/format'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -59,10 +61,15 @@ export function ReportsPage() {
   const [priority, setPriority] = usePersistedState('hrms-reports:priority', '')
   const [taskType, setTaskType] = usePersistedState('hrms-reports:taskType', '')
   const [taskSearch, setTaskSearch] = usePersistedState('hrms-reports:taskSearch', '')
+  const [dateField, setDateField] = usePersistedState<'created' | 'planning'>(
+    'hrms-reports:dateField',
+    'created',
+  )
   const [sort, setSort] = usePersistedState<{ key: string; dir: 'asc' | 'desc' } | null>(
     'hrms-reports:sort',
     null,
   )
+  const [detail, setDetail] = useState<DetailView | null>(null)
   const { data: users = [] } = useUsers()
   const { data: taskCategories = [] } = useTaskCategories()
   const { data, isLoading } = useReport(type, {
@@ -74,6 +81,7 @@ export function ReportsPage() {
     priority: priority || undefined,
     taskType: taskType || undefined,
     taskSearch: taskSearch || undefined,
+    dateField: type === 'task' ? dateField : undefined,
   })
   const { data: allowedFields = new Map<string, boolean>() } = useAllowedReportFields(type)
   const catalogColumns = useMemo(
@@ -114,6 +122,90 @@ export function ReportsPage() {
     })
   }, [data?.rows, sort])
 
+  /**
+   * What gets exported. Long multi-line cells (planning updates, history) do
+   * not survive in a spreadsheet or PDF cell, so for the task report they go
+   * out as their own one-row-per-entry tables and the main table keeps a
+   * short pointer instead.
+   */
+  function exportTables(): { rows: Record<string, unknown>[]; extra: ExtraTable[]; subtitle: string } {
+    const subtitle = [
+      from || to ? `${from ? formatDate(from) : 'start'} to ${to ? formatDate(to) : 'today'}` : '',
+      userId ? (users.find((u) => u.id === userId)?.full_name ?? '') : '',
+    ]
+      .filter(Boolean)
+      .join(' · ')
+    if (type !== 'task') return { rows: sortedRows, extra: [], subtitle }
+
+    const showPlanning = visibleColumns.some((c) => c.key === 'planningUpdates')
+    const showHistory = visibleColumns.some((c) => c.key === 'history')
+    const planningRows: Record<string, unknown>[] = []
+    const historyRows: Record<string, unknown>[] = []
+    const rows = sortedRows.map((row) => {
+      const planning = (row._planning as PlanningEntry[] | undefined) ?? []
+      const history = (row._history as HistoryEntry[] | undefined) ?? []
+      for (const slot of planning)
+        planningRows.push({
+          task: row.title,
+          assignee: row.assignee,
+          date: formatDate(slot.date),
+          slot: slot.from && slot.to ? `${slot.from}-${slot.to}` : '',
+          progress: slot.progress == null ? '' : `${slot.progress}%`,
+          planned: slot.planned,
+          working: slot.working,
+          challenges: slot.challenges,
+        })
+      for (const h of history)
+        historyRows.push({
+          task: row.title,
+          assignee: row.assignee,
+          when: formatDateTime(h.at),
+          status: h.status,
+          by: h.by,
+          remarks: h.remarks,
+        })
+      return {
+        ...row,
+        planningUpdates: planning.length
+          ? `${planning.length} slot${planning.length === 1 ? '' : 's'} — see "Planning updates"`
+          : '—',
+        history: history.length
+          ? `${history.length} entr${history.length === 1 ? 'y' : 'ies'} — see "Task history"`
+          : '—',
+      }
+    })
+    const extra: ExtraTable[] = []
+    if (showPlanning)
+      extra.push({
+        name: 'Planning updates',
+        columns: [
+          { key: 'task', label: 'Task' },
+          { key: 'assignee', label: 'Assignee' },
+          { key: 'date', label: 'Date' },
+          { key: 'slot', label: 'Slot' },
+          { key: 'progress', label: 'Done %' },
+          { key: 'planned', label: 'Planned' },
+          { key: 'working', label: 'Work done / update' },
+          { key: 'challenges', label: 'Challenges' },
+        ],
+        rows: planningRows,
+      })
+    if (showHistory)
+      extra.push({
+        name: 'Task history',
+        columns: [
+          { key: 'task', label: 'Task' },
+          { key: 'assignee', label: 'Assignee' },
+          { key: 'when', label: 'When' },
+          { key: 'status', label: 'Status' },
+          { key: 'by', label: 'By' },
+          { key: 'remarks', label: 'Remarks' },
+        ],
+        rows: historyRows,
+      })
+    return { rows, extra, subtitle }
+  }
+
   return (
     <div data-testid="reports-page">
       <StickyHeader testid="reports-sticky-header">
@@ -126,7 +218,10 @@ export function ReportsPage() {
               <Button
                 variant="outline"
                 data-testid="export-excel"
-                onClick={() => exportExcel(data.filename, visibleColumns, sortedRows)}
+                onClick={() => {
+                  const out = exportTables()
+                  exportExcel(data.filename, visibleColumns, out.rows, out.extra)
+                }}
               >
                 <FileSpreadsheet className="size-4" /> Excel
               </Button>
@@ -134,13 +229,17 @@ export function ReportsPage() {
                 variant="outline"
                 data-testid="export-pdf"
                 onClick={() =>
-                  exportPdf(
-                    data.title,
-                    data.filename,
-                    visibleColumns,
-                    sortedRows,
-                    type === 'attendance' ? attendanceFill : undefined,
-                  )
+                  {
+                    const out = exportTables()
+                    exportPdf(
+                      data.title,
+                      data.filename,
+                      visibleColumns,
+                      out.rows,
+                      type === 'attendance' ? attendanceFill : undefined,
+                      { subtitle: out.subtitle, extra: out.extra },
+                    )
+                  }
                 }
               >
                 <FileText className="size-4" /> PDF
@@ -243,6 +342,21 @@ export function ReportsPage() {
         )}
         {type === 'task' && (
           <>
+            <div>
+              <Label htmlFor="report-date-field" className="text-xs text-slate-500">
+                From / To apply to
+              </Label>
+              <Select
+                id="report-date-field"
+                data-testid="report-date-field"
+                value={dateField}
+                onChange={(event) => setDateField(event.target.value as 'created' | 'planning')}
+                className="w-52"
+              >
+                <option value="created">Task created date</option>
+                <option value="planning">Planning update date</option>
+              </Select>
+            </div>
             <div>
               <Label htmlFor="report-task-group" className="text-xs text-slate-500">
                 Task group
@@ -525,6 +639,34 @@ export function ReportsPage() {
                       c.key === 'remarks' ||
                       c.key === 'reworkReason' ||
                       c.key === 'rejectionReason'
+                    const planning = c.key === 'planningUpdates' ? (row._planning as PlanningEntry[] | undefined) : undefined
+                    const history = c.key === 'history' ? (row._history as HistoryEntry[] | undefined) : undefined
+                    if (planning?.length || history?.length) {
+                      const count = planning?.length ?? history?.length ?? 0
+                      const last = planning?.length
+                        ? formatDate(planning[planning.length - 1].date)
+                        : formatDate(history![history!.length - 1].at)
+                      return (
+                        <Td key={c.key} className="align-top whitespace-nowrap">
+                          <button
+                            type="button"
+                            data-testid={planning ? 'report-planning-view' : 'report-history-view'}
+                            className="border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium"
+                            onClick={() =>
+                              setDetail({
+                                title: String(row.title ?? ''),
+                                assignee: String(row.assignee ?? ''),
+                                planning: planning ?? null,
+                                history: history ?? null,
+                              })
+                            }
+                          >
+                            {count} {planning ? (count === 1 ? 'slot' : 'slots') : count === 1 ? 'entry' : 'entries'} · View
+                          </button>
+                          <div className="mt-0.5 text-[11px] text-slate-400">latest {last}</div>
+                        </Td>
+                      )
+                    }
                     return (
                       <Td key={c.key} className={isLong ? 'align-top' : undefined}>
                         {meta ? (
@@ -549,6 +691,120 @@ export function ReportsPage() {
         </>
       )}
       </div>
+      {detail && <DetailModal detail={detail} onClose={() => setDetail(null)} />}
     </div>
+  )
+}
+
+interface PlanningEntry {
+  date: string
+  from: string
+  to: string
+  progress: number | null
+  planned: string
+  working: string
+  challenges: string
+}
+interface HistoryEntry {
+  at: string
+  status: string
+  by: string
+  remarks: string
+}
+interface DetailView {
+  title: string
+  assignee: string
+  planning: PlanningEntry[] | null
+  history: HistoryEntry[] | null
+}
+
+/**
+ * Readable view of a task's planning updates (one row per slot, grouped by
+ * date) or its status history — the report cell only shows a count because
+ * the full text does not fit in a table cell.
+ */
+function DetailModal({ detail, onClose }: { detail: DetailView; onClose: () => void }) {
+  const planning = detail.planning
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="wide"
+      title={`${planning ? 'Planning updates' : 'History'} · ${detail.title}`}
+      testid="report-detail-modal"
+    >
+      <p className="mb-3 text-xs text-slate-500">
+        {detail.assignee && detail.assignee !== '—' ? `Assignee: ${detail.assignee} · ` : ''}
+        {planning
+          ? `${planning.length} planning slot${planning.length === 1 ? '' : 's'} linked to this task, oldest first.`
+          : `${detail.history?.length ?? 0} status change(s), oldest first.`}
+      </p>
+      {planning ? (
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full min-w-[52rem] text-left text-sm" data-testid="report-planning-table">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="w-28 px-3 py-2">Date</th>
+                <th className="w-28 px-3 py-2">Slot</th>
+                <th className="w-20 px-3 py-2">Done %</th>
+                <th className="px-3 py-2">Planned</th>
+                <th className="px-3 py-2">Work done / update</th>
+                <th className="px-3 py-2">Challenges</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {planning.map((slot, i) => {
+                const newDate = i === 0 || planning[i - 1].date !== slot.date
+                return (
+                  <tr key={i} className={`align-top ${newDate && i > 0 ? 'border-t-2 border-slate-200' : ''}`}>
+                    <td className="px-3 py-2 font-medium whitespace-nowrap text-slate-900">
+                      {newDate ? formatDate(slot.date) : ''}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-600">
+                      {slot.from && slot.to ? `${slot.from} – ${slot.to}` : '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      {slot.progress == null ? (
+                        '—'
+                      ) : (
+                        <Badge tone={slot.progress >= 100 ? 'green' : slot.progress > 0 ? 'blue' : 'slate'}>
+                          {slot.progress}%
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 whitespace-pre-wrap text-slate-700">{slot.planned || '—'}</td>
+                    <td className="px-3 py-2 whitespace-pre-wrap text-slate-700">{slot.working || '—'}</td>
+                    <td className="px-3 py-2 whitespace-pre-wrap text-amber-700">{slot.challenges || '—'}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full min-w-[40rem] text-left text-sm" data-testid="report-history-table">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              <tr>
+                <th className="w-44 px-3 py-2">When</th>
+                <th className="w-40 px-3 py-2">Status</th>
+                <th className="w-44 px-3 py-2">By</th>
+                <th className="px-3 py-2">Remarks</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {(detail.history ?? []).map((h, i) => (
+                <tr key={i} className="align-top">
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-600">{formatDateTime(h.at)}</td>
+                  <td className="px-3 py-2 font-medium text-slate-900">{h.status}</td>
+                  <td className="px-3 py-2 text-slate-700">{h.by}</td>
+                  <td className="px-3 py-2 whitespace-pre-wrap text-slate-700">{h.remarks || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Modal>
   )
 }

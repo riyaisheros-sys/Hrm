@@ -37,6 +37,9 @@ export interface ReportFilters {
   taskType?: string
   /** Case-insensitive title search — task report. */
   taskSearch?: string
+  /** Task report: what From / To mean — the task's created date (default) or
+   *  the date of a planning update linked to it. */
+  dateField?: 'created' | 'planning'
 }
 
 export interface ReportData {
@@ -326,14 +329,24 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     }
   },
   task: async (f) => {
+    // Planning updates are always limited to the selected dates. In "planning
+    // update date" mode the dates also decide which tasks are listed: only
+    // tasks with at least one planning update in the range (!inner).
+    const byPlanning = f.dateField === 'planning' && !!(f.from || f.to)
     let q = supabase
       .from('tasks')
       .select(
-        'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by,to_status:task_statuses!task_status_history_to_status_id_fkey(name),changer:profiles!task_status_history_changed_by_fkey(full_name,email)),planning_slots(plan_date,start_time,end_time,progress,remarks,challenges,task_name)',
+        'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by,to_status:task_statuses!task_status_history_to_status_id_fkey(name),changer:profiles!task_status_history_changed_by_fkey(full_name,email)),planning_slots' +
+          (byPlanning ? '!inner' : '') +
+          '(plan_date,start_time,end_time,progress,remarks,challenges,task_name)',
       )
     if (f.userId) q = q.eq('assignee_id', f.userId)
-    if (f.from) q = q.gte('created_at', f.from)
-    if (f.to) q = q.lte('created_at', `${f.to}T23:59:59`)
+    if (!byPlanning) {
+      if (f.from) q = q.gte('created_at', f.from)
+      if (f.to) q = q.lte('created_at', `${f.to}T23:59:59`)
+    }
+    if (f.from) q = q.gte('planning_slots.plan_date', f.from)
+    if (f.to) q = q.lte('planning_slots.plan_date', f.to)
     if (f.category) q = q.eq('category_id', f.category)
     if (f.priority) q = q.eq('priority', f.priority)
     if (f.taskType) q = q.eq('task_type', f.taskType)
@@ -472,6 +485,22 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
           delayComments: delay.isDelayed ? statusRemark || t.remarks || '—' : '—',
           remarks: t.remarks ?? '—',
           planningUpdates: planningUpdates || '—',
+          // Structured copies for the on-screen detail view (not exported).
+          _planning: planningSlots.map((slot) => ({
+            date: slot.plan_date,
+            from: slot.start_time ? String(slot.start_time).slice(0, 5) : '',
+            to: slot.end_time ? String(slot.end_time).slice(0, 5) : '',
+            progress: slot.progress,
+            planned: slot.task_name?.trim() || '',
+            working: slot.remarks?.trim() || '',
+            challenges: slot.challenges?.trim() || '',
+          })),
+          _history: historyChronological.map((h) => ({
+            at: h.created_at,
+            status: h.to_status?.name ?? 'Updated',
+            by: h.changer?.full_name || h.changer?.email || 'System',
+            remarks: h.remarks?.trim() || '',
+          })),
           planningCount: planningSlots.length,
           history: historySummary || '—',
           historyCount: history.length,
@@ -1185,6 +1214,7 @@ export function useReport(type: ReportType, filters: ReportFilters = {}) {
       filters.priority ?? '',
       filters.taskType ?? '',
       filters.taskSearch ?? '',
+      filters.dateField ?? '',
     ],
     queryFn: async () => {
       const report = await fetchers[type](filters)
