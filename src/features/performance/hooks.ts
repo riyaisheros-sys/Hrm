@@ -28,6 +28,11 @@ export const SYSTEM_METRICS: { value: string; label: string; logic: string }[] =
     logic: 'Tasks finished on or before the due date ÷ completed tasks with a due date',
   },
   { value: 'planning', label: 'Planning', logic: 'Fully planned days ÷ worked days' },
+  {
+    value: 'planning_discipline',
+    label: 'Planning discipline',
+    logic: 'Planning entries made on time ÷ all planning entries (late = entered after the slot ended)',
+  },
 ]
 export const metricLabel = (value: string | null) =>
   SYSTEM_METRICS.find((m) => m.value === value)?.label ?? null

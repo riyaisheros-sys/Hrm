@@ -31,6 +31,7 @@ import { useUsers } from '@/features/admin/users/hooks'
 import { useDepartments } from '@/features/admin/hierarchy/hooks'
 import { useAdminAttendance, useAttendanceConfig } from '@/features/attendance/hooks'
 import { todayInTz } from '@/features/attendance/geo'
+import { useAttendanceRoster } from '@/features/attendance/roster'
 import { usePendingApprovals } from '@/features/leave/hooks'
 import type { LeaveRequestRow } from '@/features/leave/hooks'
 import { LeaveDecisionModal } from '@/features/leave/LeaveDecisionModal'
@@ -213,14 +214,15 @@ export function AdminDashboard() {
   const openTasks = tasks.filter((t) => !t.status?.is_terminal).length
   const openTickets = tickets.filter((t) => t.status !== 'resolved' && t.status !== 'closed').length
   const breachedTickets = tickets.filter(isSlaBreached).length
-  // Absent = attendance rows marked absent + active employees who never
-  // punched (no row at all). Same definition the Attendance Monitor's Absent
-  // filter uses, so the tile and the list it opens always agree.
-  const activeUsers = users.filter((u) => u.status === 'active')
-  const punchedIds = new Set(attendance.map((r) => r.user_id))
-  const absentToday =
-    attendance.filter((r) => r.status === 'absent').length +
-    activeUsers.filter((u) => !punchedIds.has(u.id)).length
+  // Absent = attendance rows marked absent + expected employees with no punch.
+  // "Expected" comes from the shared roster rule (also used by the Attendance
+  // Monitor): not on a Sunday / holiday, not on approved full-day leave, and
+  // not an account that never marks attendance (owners / directors).
+  const roster = useAttendanceRoster(
+    today,
+    attendance.map((r) => r.user_id),
+  )
+  const absentToday = attendance.filter((r) => r.status === 'absent').length + roster.notPunched.length
   const attendanceLink = (status: string) => `/admin/attendance?date=${today}&status=${status}`
   const overtimeToday = attendance.reduce((sum, r) => sum + (r.overtime_minutes ?? 0), 0)
   const missedPunchOuts = attendance.filter((r) => r.missed_punch_out).length
@@ -251,7 +253,7 @@ export function AdminDashboard() {
     employees: <Stat label="Employees" value={users.length} icon={Users} to="/admin/users" />,
     present: (
       <Stat
-        label={`Present ${dateSuffix} (of ${activeUsers.length})`}
+        label={`Present ${dateSuffix} (of ${roster.expected.length})`}
         value={presentToday}
         icon={CalendarCheck}
         tone="green"
@@ -291,7 +293,13 @@ export function AdminDashboard() {
       />
     ),
     'absent-today': (
-      <Stat label={`Absent ${dateSuffix}`} value={absentToday} icon={UserX} tone="red" to={attendanceLink('absent')} />
+      <Stat
+        label={`Absent ${dateSuffix}${roster.offDay ? ` · ${roster.offDay}` : ''}`}
+        value={roster.ready ? absentToday : '—'}
+        icon={UserX}
+        tone="red"
+        to={attendanceLink('absent')}
+      />
     ),
     'overtime-today': (
       <Stat label={`Overtime minutes (${dateSuffix})`} value={overtimeToday} icon={Clock} tone="blue" to={attendanceLink('overtime')} />

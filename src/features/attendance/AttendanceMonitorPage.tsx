@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { CalendarPlus, MapPin, Pencil, Settings } from 'lucide-react'
-import { useUsers } from '@/features/admin/users/hooks'
+import { useAttendanceRoster } from './roster'
 import { Select } from '@/components/ui/Select'
 import {
   type AdminAttendanceRow,
@@ -69,44 +69,46 @@ export function AttendanceMonitorPage() {
     paramStatus && STATUS_FILTERS.some((f) => f.value === paramStatus) ? paramStatus : '',
   )
   const { data: rows = [], isLoading } = useAdminAttendance(from, to)
-  const { data: users = [] } = useUsers()
+  const roster = useAttendanceRoster(
+    from,
+    rows.map((r) => r.user_id),
+  )
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [locationsOpen, setLocationsOpen] = useState(false)
   const [view, setView] = useState<'list' | 'register'>('list')
   const [correction, setCorrection] = useState<{ userId: string; date: string } | null>(null)
   const multiDay = from !== to
 
-  // Active employees with no attendance row at all for the day. They never
-  // punched, so they have no attendance_days record — but they ARE absent.
+  // Expected employees with no attendance row for the day. They never punched,
+  // so they have no attendance_days record — but they ARE absent. Who counts
+  // as "expected" is decided by the shared roster rule (same as the dashboard).
   // Only meaningful for a single day.
+  const rosterAbsent = roster.notPunched
   const notPunched = useMemo<MonitorRow[]>(() => {
     if (multiDay) return []
-    const seen = new Set(rows.map((r) => r.user_id))
-    return users
-      .filter((u) => u.status === 'active' && !seen.has(u.id))
-      .map(
-        (u) =>
-          ({
-            id: `not-punched-${u.id}`,
-            user_id: u.id,
-            work_date: from,
-            status: 'absent',
-            worked_minutes: 0,
-            credited_minutes: 0,
-            late_minutes: 0,
-            overtime_minutes: 0,
-            punch_count: 0,
-            first_in_at: null,
-            last_out_at: null,
-            is_late: false,
-            missed_punch_out: false,
-            is_manual: false,
-            remarks: null,
-            profiles: { full_name: u.full_name, email: u.email },
-            _noPunch: true,
-          }) as unknown as MonitorRow,
-      )
-  }, [users, rows, multiDay, from])
+    return rosterAbsent.map(
+      (u) =>
+        ({
+          id: `not-punched-${u.id}`,
+          user_id: u.id,
+          work_date: from,
+          status: 'absent',
+          worked_minutes: 0,
+          credited_minutes: 0,
+          late_minutes: 0,
+          overtime_minutes: 0,
+          punch_count: 0,
+          first_in_at: null,
+          last_out_at: null,
+          is_late: false,
+          missed_punch_out: false,
+          is_manual: false,
+          remarks: null,
+          profiles: { full_name: u.full_name, email: u.email },
+          _noPunch: true,
+        }) as unknown as MonitorRow,
+    )
+  }, [rosterAbsent, multiDay, from])
 
   const filteredRows = useMemo<MonitorRow[]>(() => {
     switch (statusFilter) {
@@ -317,6 +319,33 @@ export function AttendanceMonitorPage() {
               <span className="size-2 animate-pulse rounded-full bg-emerald-500" /> live
             </span>
           </div>
+
+          {!multiDay && roster.ready && (roster.offDay || roster.onLeave.length > 0 || roster.notTracked.length > 0) && (
+            <div
+              data-testid="monitor-roster-note"
+              className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600"
+            >
+              {roster.offDay && (
+                <p>
+                  <span className="font-medium text-slate-800">{roster.offDay}</span> — nobody is
+                  expected, so no one is counted absent.
+                </p>
+              )}
+              {roster.onLeave.length > 0 && (
+                <p>
+                  <span className="font-medium text-slate-800">On approved leave:</span>{' '}
+                  {roster.onLeave.map((u) => u.full_name || u.email).join(', ')}
+                </p>
+              )}
+              {roster.notTracked.length > 0 && (
+                <p>
+                  <span className="font-medium text-slate-800">Not counted for attendance:</span>{' '}
+                  {roster.notTracked.map((u) => u.full_name || u.email).join(', ')} — they have never
+                  marked attendance. Change this per person in Users → Edit → Attendance.
+                </p>
+              )}
+            </div>
+          )}
 
           <div
             data-testid="monitor-summary"

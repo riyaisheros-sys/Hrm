@@ -19,6 +19,26 @@ export function usePlanningConfig() {
   })
 }
 
+/** Change planning settings (needs planning.config). */
+export function useUpdatePlanningConfig() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (patch: Partial<PlanningConfig>) => {
+      const { data, error } = await supabase
+        .from('planning_config')
+        .update(patch)
+        .eq('id', true)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to change planning settings')
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['planning-config'] })
+      qc.invalidateQueries({ queryKey: ['report'] })
+    },
+  })
+}
+
 export function usePlanningSlots(planDate: string, kind: 'day' | 'next_day') {
   const { user } = useAuth()
   return useQuery({

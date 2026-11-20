@@ -385,6 +385,12 @@ function EditUserModal({
   const qc = useQueryClient()
   const { data: savedItems } = useUserPerformanceItems(user.id)
   const [designationId, setDesignationId] = useState(user.designation_id ?? '')
+  // '' = automatic, 'counted' = always counted, 'exempt' = never counted.
+  const initialAttendance =
+    user.attendance_exempt === true ? 'exempt' : user.attendance_exempt === false ? 'counted' : ''
+  const [attendanceMode, setAttendanceMode] = useState(initialAttendance)
+  // The column arrives with a database update; until then the choice is locked.
+  const attendanceModeSupported = 'attendance_exempt' in user
   // null = untouched, show what is saved; a Set = the admin's pending choice.
   const [itemDraft, setItemDraft] = useState<Set<string> | null>(null)
   const selectedItems = itemDraft ?? savedItems ?? new Set<string>()
@@ -417,6 +423,12 @@ function EditUserModal({
         // that does not have the designation column yet.
         ...(designationId !== (user.designation_id ?? '')
           ? { designation_id: designationId || null }
+          : {}),
+        ...(attendanceMode !== initialAttendance
+          ? {
+              attendance_exempt:
+                attendanceMode === 'exempt' ? true : attendanceMode === 'counted' ? false : null,
+            }
           : {}),
       })
       if (itemDraft) {
@@ -552,6 +564,25 @@ function EditUserModal({
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </Select>
+          </div>
+          <div>
+            <Label htmlFor="user-attendance-mode">Attendance</Label>
+            <Select
+              id="user-attendance-mode"
+              data-testid="user-attendance-mode"
+              value={attendanceMode}
+              disabled={!attendanceModeSupported}
+              onChange={(e) => setAttendanceMode(e.target.value)}
+            >
+              <option value="">Automatic</option>
+              <option value="counted">Marks attendance — count if absent</option>
+              <option value="exempt">Does not mark attendance — never absent</option>
+            </Select>
+            <p className="mt-1 text-xs text-slate-400">
+              {attendanceModeSupported
+                ? 'Automatic: counted for Present / Absent only once they have marked attendance at least once.'
+                : 'Automatic for now — this choice becomes available after the pending database update.'}
+            </p>
           </div>
           <div>
             <Label htmlFor="user-task-capacity">Task capacity</Label>

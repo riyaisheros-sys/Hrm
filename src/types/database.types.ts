@@ -2095,6 +2095,7 @@ export type Database = {
           policy: string
           slot_interval_hours: number
           updated_at: string
+          late_entry_grace_minutes: number
         }
         Insert: {
           day_end?: string
@@ -2103,6 +2104,7 @@ export type Database = {
           policy?: string
           slot_interval_hours?: number
           updated_at?: string
+          late_entry_grace_minutes?: number
         }
         Update: {
           day_end?: string
@@ -2111,6 +2113,7 @@ export type Database = {
           policy?: string
           slot_interval_hours?: number
           updated_at?: string
+          late_entry_grace_minutes?: number
         }
         Relationships: []
       }
@@ -2428,6 +2431,7 @@ export type Database = {
           kra_value: number | null
           kpi_value: number | null
           designation_id: string | null
+          attendance_exempt: boolean | null
         }
         Insert: {
           avatar_url?: string | null
@@ -2448,6 +2452,7 @@ export type Database = {
           kra_value?: number | null
           kpi_value?: number | null
           designation_id?: string | null
+          attendance_exempt?: boolean | null
         }
         Update: {
           avatar_url?: string | null
@@ -2468,6 +2473,7 @@ export type Database = {
           kra_value?: number | null
           kpi_value?: number | null
           designation_id?: string | null
+          attendance_exempt?: boolean | null
         }
         Relationships: [
           {
