@@ -26,6 +26,7 @@ const TYPES: ReportType[] = [
   'task',
   'appraisal',
   'planning',
+  'planning_lock',
   'recruitment',
   'communication',
   'documents',
@@ -158,7 +159,15 @@ export function ReportsPage() {
             id="report-category"
             data-testid="report-category"
             value={type}
-            onChange={(event) => setType(event.target.value as ReportType)}
+            onChange={(event) => {
+              setType(event.target.value as ReportType)
+              setStatus('')
+              setCategory('')
+              setPriority('')
+              setTaskType('')
+              setTaskSearch('')
+              setSort(null)
+            }}
             className="mt-1 w-full"
           >
             {TYPES.map((reportType) => (
@@ -211,6 +220,24 @@ export function ReportsPage() {
               <option value="overtime">With overtime</option>
               <option value="missed_punch_out">Missed punch-out</option>
               <option value="corrected">Manually corrected</option>
+            </Select>
+          </div>
+        )}
+        {type === 'planning_lock' && (
+          <div>
+            <Label htmlFor="report-lock-state" className="text-xs text-slate-500">
+              State
+            </Label>
+            <Select
+              id="report-lock-state"
+              data-testid="report-lock-state"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              className="w-44"
+            >
+              <option value="">Locked + Unlocked</option>
+              <option value="locked">Locked now</option>
+              <option value="unlocked">Unlocked by admin</option>
             </Select>
           </div>
         )}
@@ -432,6 +459,16 @@ export function ReportsPage() {
             data-testid="report-total-records"
           >
             Total Records: {sortedRows.length}
+            {type === 'planning_lock' && (
+              <span className="ml-3 inline-flex gap-2" data-testid="lock-report-counts">
+                <Badge tone="red">
+                  Locked now: {sortedRows.filter((r) => r._state === 'locked').length}
+                </Badge>
+                <Badge tone="green">
+                  Unlocked: {sortedRows.filter((r) => r._state === 'unlocked').length}
+                </Badge>
+              </span>
+            )}
           </div>
           <Table data-testid="report-table">
             <Thead>

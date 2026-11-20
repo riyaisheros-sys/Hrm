@@ -13,6 +13,7 @@ export type ReportType =
   | 'task'
   | 'appraisal'
   | 'planning'
+  | 'planning_lock'
   | 'recruitment'
   | 'communication'
   | 'documents'
@@ -52,6 +53,7 @@ export const REPORT_LABELS: Record<ReportType, string> = {
   task: 'Task',
   appraisal: 'Performance / Appraisal',
   planning: 'Planning',
+  planning_lock: 'Planning Lock / Unlock',
   recruitment: 'Recruitment',
   communication: 'Communication',
   documents: 'Doc Vault',
@@ -1044,6 +1046,86 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
       }),
     }
   },
+  // Who is punch-locked right now (planning incomplete) + every admin unlock
+  // with its remark. Status filter: 'locked' | 'unlocked'. The date range
+  // applies to the planning date (the day whose planning was incomplete).
+  planning_lock: async (f) => {
+    const { data: people, error: pErr } = await supabase
+      .from('profiles')
+      .select('id,full_name,email,employee_code')
+    if (pErr) throw pErr
+    const byId = new Map((people ?? []).map((p) => [p.id, p]))
+    const who = (id: string | null) => {
+      const p = id ? byId.get(id) : null
+      return p ? p.full_name || p.email : '—'
+    }
+    const inRange = (date: string | null | undefined) =>
+      !date || ((!f.from || date >= f.from) && (!f.to || date <= f.to))
+
+    const rows: Record<string, unknown>[] = []
+
+    if (f.status !== 'unlocked') {
+      // Needs attendance.unlock / planning.view_all; without it the caller
+      // simply sees no live-lock rows (same as RLS on the history table).
+      const { data: overview, error: oErr } = await supabase.rpc('punch_lock_overview')
+      const live = oErr
+        ? []
+        : ((overview ?? []) as { user_id: string; locked: boolean; prev_date?: string }[])
+      for (const entry of live) {
+        if (!entry.locked) continue
+        if (f.userId && entry.user_id !== f.userId) continue
+        if (!inRange(entry.prev_date)) continue
+        rows.push({
+          employee: who(entry.user_id),
+          code: byId.get(entry.user_id)?.employee_code ?? '—',
+          state: 'Locked',
+          planningDate: formatDate(entry.prev_date ?? null),
+          unlockedBy: '—',
+          unlockedAt: '—',
+          remarks: 'Punch-in blocked — planning incomplete, waiting for admin unlock',
+          _state: 'locked',
+        })
+      }
+    }
+
+    if (f.status !== 'locked') {
+      let q = supabase
+        .from('planning_unlock_history')
+        .select('user_id,work_date,unlocked_by,remarks,created_at')
+      if (f.userId) q = q.eq('user_id', f.userId)
+      if (f.from) q = q.gte('work_date', f.from)
+      if (f.to) q = q.lte('work_date', f.to)
+      const { data, error } = await q.order('created_at', { ascending: false }).limit(1000)
+      if (error) throw error
+      for (const h of data ?? []) {
+        rows.push({
+          employee: who(h.user_id),
+          code: byId.get(h.user_id)?.employee_code ?? '—',
+          state: 'Unlocked',
+          planningDate: formatDate(h.work_date),
+          unlockedBy: who(h.unlocked_by),
+          unlockedAt: formatDateTime(h.created_at),
+          remarks: h.remarks || '—',
+          _state: 'unlocked',
+        })
+      }
+    }
+
+    return {
+      title: 'Planning Lock / Unlock Report',
+      filename: 'planning-lock-report',
+      columns: [
+        { key: 'employee', label: 'Employee' },
+        { key: 'code', label: 'Employee Code' },
+        { key: 'state', label: 'State' },
+        { key: 'planningDate', label: 'Planning Date (incomplete day)' },
+        { key: 'unlockedBy', label: 'Unlocked By' },
+        { key: 'unlockedAt', label: 'Unlocked At' },
+        { key: 'remarks', label: 'Admin Remarks' },
+      ],
+      rows,
+    }
+  },
   workflows: async (f) => {
     let q = supabase
       .from('workflow_definitions')
@@ -1101,6 +1183,8 @@ export function useReport(type: ReportType, filters: ReportFilters = {}) {
       filters.status ?? '',
       filters.category ?? '',
       filters.priority ?? '',
+      filters.taskType ?? '',
+      filters.taskSearch ?? '',
     ],
     queryFn: async () => {
       const report = await fetchers[type](filters)
