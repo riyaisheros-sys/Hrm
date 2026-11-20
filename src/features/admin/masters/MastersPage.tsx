@@ -28,6 +28,7 @@ import { Card, CardBody } from '@/components/ui/Card'
 import { Modal } from '@/components/ui/Modal'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { useToast } from '@/components/ui/toast-context'
+import { HeadingColourCard } from './HeadingColourCard'
 import { formatDateTime } from '@/lib/format'
 
 /**
@@ -328,6 +329,8 @@ export function MastersPage() {
           </div>
         }
       />
+
+      <HeadingColourCard />
 
       <div
         data-testid="master-module-map"
