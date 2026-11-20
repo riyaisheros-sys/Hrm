@@ -413,7 +413,11 @@ function EditUserModal({
         task_capacity: taskCapacity.trim() ? Math.max(1, Math.round(Number(taskCapacity))) : null,
         kra_value: kraValue.trim() ? Number(kraValue) : null,
         kpi_value: kpiValue.trim() ? Number(kpiValue) : null,
-        designation_id: designationId || null,
+        // Only sent when changed, so saving a user keeps working on a database
+        // that does not have the designation column yet.
+        ...(designationId !== (user.designation_id ?? '')
+          ? { designation_id: designationId || null }
+          : {}),
       })
       if (itemDraft) {
         await setUserPerformanceItems(user.id, [...itemDraft])
