@@ -213,7 +213,15 @@ export function AdminDashboard() {
   const openTasks = tasks.filter((t) => !t.status?.is_terminal).length
   const openTickets = tickets.filter((t) => t.status !== 'resolved' && t.status !== 'closed').length
   const breachedTickets = tickets.filter(isSlaBreached).length
-  const absentToday = users.length - presentToday
+  // Absent = attendance rows marked absent + active employees who never
+  // punched (no row at all). Same definition the Attendance Monitor's Absent
+  // filter uses, so the tile and the list it opens always agree.
+  const activeUsers = users.filter((u) => u.status === 'active')
+  const punchedIds = new Set(attendance.map((r) => r.user_id))
+  const absentToday =
+    attendance.filter((r) => r.status === 'absent').length +
+    activeUsers.filter((u) => !punchedIds.has(u.id)).length
+  const attendanceLink = (status: string) => `/admin/attendance?date=${today}&status=${status}`
   const overtimeToday = attendance.reduce((sum, r) => sum + (r.overtime_minutes ?? 0), 0)
   const missedPunchOuts = attendance.filter((r) => r.missed_punch_out).length
   const awaitingApprovals = tasks.filter((t) => t.status?.slug === 'awaiting_approval').length
@@ -243,11 +251,11 @@ export function AdminDashboard() {
     employees: <Stat label="Employees" value={users.length} icon={Users} to="/admin/users" />,
     present: (
       <Stat
-        label={`Present ${dateSuffix} (of ${users.length})`}
+        label={`Present ${dateSuffix} (of ${activeUsers.length})`}
         value={presentToday}
         icon={CalendarCheck}
         tone="green"
-        to="/admin/attendance"
+        to={attendanceLink('present')}
       />
     ),
     late: (
@@ -256,7 +264,7 @@ export function AdminDashboard() {
         value={lateToday}
         icon={AlarmClock}
         tone="amber"
-        to="/admin/attendance"
+        to={attendanceLink('late')}
       />
     ),
     'leave-approvals': (
@@ -283,13 +291,13 @@ export function AdminDashboard() {
       />
     ),
     'absent-today': (
-      <Stat label={`Absent ${dateSuffix}`} value={absentToday} icon={UserX} tone="red" to="/admin/attendance" />
+      <Stat label={`Absent ${dateSuffix}`} value={absentToday} icon={UserX} tone="red" to={attendanceLink('absent')} />
     ),
     'overtime-today': (
-      <Stat label={`Overtime minutes (${dateSuffix})`} value={overtimeToday} icon={Clock} tone="blue" to="/admin/attendance" />
+      <Stat label={`Overtime minutes (${dateSuffix})`} value={overtimeToday} icon={Clock} tone="blue" to={attendanceLink('overtime')} />
     ),
     'missed-punchouts': (
-      <Stat label="Missed punch-outs" value={missedPunchOuts} icon={TriangleAlert} tone="amber" to="/admin/attendance" />
+      <Stat label="Missed punch-outs" value={missedPunchOuts} icon={TriangleAlert} tone="amber" to={attendanceLink('missed')} />
     ),
     'awaiting-approvals': (
       <Stat label="Tasks awaiting approval" value={awaitingApprovals} icon={ClipboardList} tone="amber" to="/tasks" />

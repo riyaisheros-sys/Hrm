@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { CalendarPlus, MapPin, Pencil, Settings } from 'lucide-react'
+import { useUsers } from '@/features/admin/users/hooks'
+import { Select } from '@/components/ui/Select'
 import {
+  type AdminAttendanceRow,
   useAdminAttendance,
   useAttendanceConfig,
   useAttendanceRealtime,
@@ -34,6 +38,17 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
 
+type StatusFilter = '' | 'present' | 'absent' | 'late' | 'overtime' | 'missed'
+const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: '', label: 'All' },
+  { value: 'present', label: 'Present' },
+  { value: 'absent', label: 'Absent' },
+  { value: 'late', label: 'Late arrivals' },
+  { value: 'overtime', label: 'With overtime' },
+  { value: 'missed', label: 'Missed punch-out' },
+]
+type MonitorRow = AdminAttendanceRow & { _noPunch?: boolean }
+
 export function AttendanceMonitorPage() {
   const { hasPermission } = useProfile()
   const canAdd = hasPermission('attendance.add')
@@ -41,15 +56,73 @@ export function AttendanceMonitorPage() {
   const { data: config } = useAttendanceConfig()
   const tz = config?.timezone ?? 'Asia/Kolkata'
   const today = todayInTz(tz)
-  const [from, setFrom] = useState(today)
-  const [to, setTo] = useState(today)
+  // Dashboard tiles deep-link here with ?date=YYYY-MM-DD&status=absent etc.
+  const [searchParams] = useSearchParams()
+  const paramDate = searchParams.get('date')
+  const initialDate = paramDate && /^\d{4}-\d{2}-\d{2}$/.test(paramDate) ? paramDate : today
+  const paramStatus = searchParams.get('status') as StatusFilter | null
+  const [from, setFrom] = useState(initialDate)
+  const [to, setTo] = useState(initialDate)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+    paramStatus && STATUS_FILTERS.some((f) => f.value === paramStatus) ? paramStatus : '',
+  )
   const { data: rows = [], isLoading } = useAdminAttendance(from, to)
+  const { data: users = [] } = useUsers()
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [locationsOpen, setLocationsOpen] = useState(false)
   const [view, setView] = useState<'list' | 'register'>('list')
   const [correction, setCorrection] = useState<{ userId: string; date: string } | null>(null)
   const multiDay = from !== to
-  const pagination = usePagination(rows, 25, `${from}|${to}`)
+
+  // Active employees with no attendance row at all for the day. They never
+  // punched, so they have no attendance_days record — but they ARE absent.
+  // Only meaningful for a single day.
+  const notPunched = useMemo<MonitorRow[]>(() => {
+    if (multiDay) return []
+    const seen = new Set(rows.map((r) => r.user_id))
+    return users
+      .filter((u) => u.status === 'active' && !seen.has(u.id))
+      .map(
+        (u) =>
+          ({
+            id: `not-punched-${u.id}`,
+            user_id: u.id,
+            work_date: from,
+            status: 'absent',
+            worked_minutes: 0,
+            credited_minutes: 0,
+            late_minutes: 0,
+            overtime_minutes: 0,
+            punch_count: 0,
+            first_in_at: null,
+            last_out_at: null,
+            is_late: false,
+            missed_punch_out: false,
+            is_manual: false,
+            remarks: null,
+            profiles: { full_name: u.full_name, email: u.email },
+            _noPunch: true,
+          }) as unknown as MonitorRow,
+      )
+  }, [users, rows, multiDay, from])
+
+  const filteredRows = useMemo<MonitorRow[]>(() => {
+    switch (statusFilter) {
+      case 'present':
+        return rows.filter((r) => r.status !== 'absent')
+      case 'absent':
+        return [...rows.filter((r) => r.status === 'absent'), ...notPunched]
+      case 'late':
+        return rows.filter((r) => r.is_late)
+      case 'overtime':
+        return rows.filter((r) => (r.overtime_minutes ?? 0) > 0)
+      case 'missed':
+        return rows.filter((r) => r.missed_punch_out)
+      default:
+        return rows
+    }
+  }, [rows, notPunched, statusFilter])
+  const pagination = usePagination(filteredRows, 25, `${from}|${to}|${statusFilter}`)
 
   useAttendanceRealtime()
   useCloseStaleAttendance()
@@ -60,7 +133,8 @@ export function AttendanceMonitorPage() {
       employees: new Set(rows.map((r) => r.user_id)).size,
       fullDays: 0,
       halfDays: 0,
-      absents: 0,
+      // Employees who never punched count as absent too (single day only).
+      absents: notPunched.length,
       lates: 0,
       workedMinutes: 0,
       overtimeMinutes: 0,
@@ -74,7 +148,7 @@ export function AttendanceMonitorPage() {
       s.overtimeMinutes += r.overtime_minutes ?? 0
     }
     return s
-  }, [rows])
+  }, [rows, notPunched])
 
   const perEmployee = useMemo(() => {
     if (!multiDay) return []
@@ -208,6 +282,22 @@ export function AttendanceMonitorPage() {
               onChange={(e) => setTo(e.target.value)}
               className="w-44"
             />
+            <Label htmlFor="monitor-status" className="mb-0">
+              Status
+            </Label>
+            <Select
+              id="monitor-status"
+              data-testid="monitor-status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+              className="w-44"
+            >
+              {STATUS_FILTERS.map((f) => (
+                <option key={f.value} value={f.value}>
+                  {f.label}
+                </option>
+              ))}
+            </Select>
             <span className="ml-2 inline-flex items-center gap-1.5 text-xs text-emerald-600">
               <span className="size-2 animate-pulse rounded-full bg-emerald-500" /> live
             </span>
@@ -284,8 +374,15 @@ export function AttendanceMonitorPage() {
             </div>
           )}
 
-          {!isLoading && rows.length === 0 ? (
-            <EmptyState title="No attendance recorded for this range" testid="monitor-empty" />
+          {!isLoading && filteredRows.length === 0 ? (
+            <EmptyState
+              title={
+                statusFilter
+                  ? 'No employees match this status for the selected date'
+                  : 'No attendance recorded for this range'
+              }
+              testid="monitor-empty"
+            />
           ) : (
             <Table data-testid="monitor-table">
               <Thead>
@@ -342,6 +439,7 @@ export function AttendanceMonitorPage() {
                       <Td>
                         <div className="flex flex-wrap gap-1">
                           {sunday && <Badge className={SUNDAY_META.className}>Sunday</Badge>}
+                          {r._noPunch && <Badge tone="slate">No punch</Badge>}
                           {r.overtime_minutes > 0 && (
                             <Badge tone="blue">OT {r.overtime_minutes}m</Badge>
                           )}

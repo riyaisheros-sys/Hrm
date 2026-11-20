@@ -1,6 +1,15 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Download, GripVertical, Pencil, Plus, RotateCcw, Trash2, Upload } from 'lucide-react'
+import {
+  Download,
+  GripVertical,
+  Pencil,
+  Plus,
+  RotateCcw,
+  Trash2,
+  TriangleAlert,
+  Upload,
+} from 'lucide-react'
 import {
   useDeleteMasterItem,
   useMasterAudit,
@@ -16,6 +25,7 @@ import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
 import { Card, CardBody } from '@/components/ui/Card'
+import { Modal } from '@/components/ui/Modal'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { useToast } from '@/components/ui/toast-context'
 import { formatDateTime } from '@/lib/format'
@@ -95,6 +105,22 @@ const SIMPLE_KINDS = KINDS.filter(
 const MODULES: string[] = []
 for (const k of KINDS) if (!MODULES.includes(k.module)) MODULES.push(k.module)
 
+/**
+ * Every change on this page goes through one confirmation popup (client ask:
+ * "save and cancel warning in the centralised master area"). `run` applies the
+ * change on Save; `onCancel` undoes any optimistic UI (e.g. a typed sequence
+ * number); `discard` adds a third button for the unsaved-changes case.
+ */
+interface PendingChange {
+  title: string
+  message: ReactNode
+  confirmLabel: string
+  danger?: boolean
+  run: () => Promise<unknown>
+  onCancel?: () => void
+  discard?: () => void
+}
+
 export function MastersPage() {
   const [kind, setKind] = useState<MasterKind>('task_categories')
   const [search, setSearch] = useState('')
@@ -112,6 +138,71 @@ export function MastersPage() {
     () => items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase())),
     [items, search],
   )
+  const kindLabel = SIMPLE_KINDS.find((k) => k.value === kind)?.label ?? 'this master'
+  const [pending, setPending] = useState<PendingChange | null>(null)
+  const [applying, setApplying] = useState(false)
+  const dirty = editing ? name.trim() !== editing.name : name.trim() !== ''
+
+  async function confirmPending() {
+    if (!pending) return
+    setApplying(true)
+    try {
+      await pending.run()
+    } catch (error) {
+      pending.onCancel?.()
+      toast.error('Save failed', (error as Error).message)
+    } finally {
+      setApplying(false)
+      setPending(null)
+    }
+  }
+
+  function cancelPending() {
+    pending?.onCancel?.()
+    setPending(null)
+  }
+
+  function saveNamePayload() {
+    return {
+      id: editing?.id,
+      code: editing?.code,
+      name,
+      is_active: editing?.is_active ?? true,
+      sort_order: editing?.sort_order ?? items.length + 1,
+    }
+  }
+
+  function applyKind(next: MasterKind) {
+    setKind(next)
+    setEditing(null)
+    setName('')
+  }
+
+  /** Switching masters with a half-typed name asks before throwing it away. */
+  function switchKind(next: MasterKind) {
+    if (next === kind) return
+    if (!dirty) {
+      applyKind(next)
+      return
+    }
+    setPending({
+      title: 'Unsaved changes',
+      message: (
+        <p>
+          You have an unsaved {editing ? 'edit' : 'new entry'}{' '}
+          <span className="font-semibold text-slate-900">{name.trim()}</span> in {kindLabel}. Save
+          it before switching?
+        </p>
+      ),
+      confirmLabel: 'Save',
+      run: async () => {
+        await save.mutateAsync(saveNamePayload())
+        toast.success(editing ? 'Master updated' : 'Master added')
+        applyKind(next)
+      },
+      discard: () => applyKind(next),
+    })
+  }
 
   function downloadBackup() {
     const blob = new Blob(
@@ -126,7 +217,8 @@ export function MastersPage() {
     URL.revokeObjectURL(url)
   }
 
-  async function restore(file: File) {
+  /** Validate the backup file first, then ask before writing anything. */
+  async function stageRestore(file: File) {
     const parsed = JSON.parse(await file.text()) as {
       version?: number
       kind?: MasterKind
@@ -136,18 +228,38 @@ export function MastersPage() {
     if (parsed.kind && parsed.kind !== kind) {
       throw new Error(`This is a ${parsed.kind} backup. Select that master before restoring it.`)
     }
-    const existingByName = new Map(items.map((item) => [item.name.trim().toLowerCase(), item]))
     for (const item of parsed.items) {
       if (!item.name?.trim()) throw new Error('Every restored item must have a name')
-      const existing = existingByName.get(item.name.trim().toLowerCase())
-      await save.mutateAsync({
-        id: existing?.id,
-        name: item.name,
-        code: existing?.code ?? item.code,
-        is_active: item.is_active,
-        sort_order: item.sort_order,
-      })
     }
+    const incoming = parsed.items
+    const existingByName = new Map(items.map((item) => [item.name.trim().toLowerCase(), item]))
+    const updates = incoming.filter((item) =>
+      existingByName.has(item.name.trim().toLowerCase()),
+    ).length
+    setPending({
+      title: 'Restore master data',
+      message: (
+        <p>
+          Restore <span className="font-semibold text-slate-900">{incoming.length}</span> item
+          {incoming.length === 1 ? '' : 's'} into {kindLabel}? {updates} existing will be updated
+          and {incoming.length - updates} added.
+        </p>
+      ),
+      confirmLabel: 'Save',
+      run: async () => {
+        for (const item of incoming) {
+          const existing = existingByName.get(item.name.trim().toLowerCase())
+          await save.mutateAsync({
+            id: existing?.id,
+            name: item.name,
+            code: existing?.code ?? item.code,
+            is_active: item.is_active,
+            sort_order: item.sort_order,
+          })
+        }
+        toast.success('Master data restored')
+      },
+    })
   }
 
   return (
@@ -172,8 +284,7 @@ export function MastersPage() {
                 const file = event.target.files?.[0]
                 if (!file) return
                 try {
-                  await restore(file)
-                  toast.success('Master data restored')
+                  await stageRestore(file)
                 } catch (error) {
                   toast.error('Restore failed', (error as Error).message)
                 }
@@ -202,11 +313,7 @@ export function MastersPage() {
                       <button
                         type="button"
                         data-testid={`master-pill-${child.value}`}
-                        onClick={() => {
-                          setKind(child.value)
-                          setEditing(null)
-                          setName('')
-                        }}
+                        onClick={() => switchKind(child.value)}
                         className={
                           'w-full rounded-md border px-2 py-1 text-left ' +
                           (kind === child.value
@@ -244,11 +351,7 @@ export function MastersPage() {
         <Select
           data-testid="master-kind-select"
           value={kind}
-          onChange={(event) => {
-            setKind(event.target.value as MasterKind)
-            setEditing(null)
-            setName('')
-          }}
+          onChange={(event) => switchKind(event.target.value as MasterKind)}
         >
           {MODULES.filter((mod) => SIMPLE_KINDS.some((k) => k.module === mod)).map(
             (mod) => (
@@ -275,23 +378,29 @@ export function MastersPage() {
             className="flex gap-2"
             onSubmit={(event) => {
               event.preventDefault()
-              save.mutate(
-                {
-                  id: editing?.id,
-                  code: editing?.code,
-                  name,
-                  is_active: editing?.is_active ?? true,
-                  sort_order: editing?.sort_order ?? items.length + 1,
+              if (!name.trim()) return
+              setPending({
+                title: editing ? 'Save changes' : 'Add to master',
+                message: editing ? (
+                  <p>
+                    Rename <span className="font-semibold text-slate-900">{editing.name}</span> to{' '}
+                    <span className="font-semibold text-slate-900">{name.trim()}</span> in{' '}
+                    {kindLabel}?
+                  </p>
+                ) : (
+                  <p>
+                    Add <span className="font-semibold text-slate-900">{name.trim()}</span> to{' '}
+                    {kindLabel}?
+                  </p>
+                ),
+                confirmLabel: 'Save',
+                run: async () => {
+                  await save.mutateAsync(saveNamePayload())
+                  toast.success(editing ? 'Master updated' : 'Master added')
+                  setEditing(null)
+                  setName('')
                 },
-                {
-                  onSuccess: () => {
-                    toast.success(editing ? 'Master updated' : 'Master added')
-                    setEditing(null)
-                    setName('')
-                  },
-                  onError: (error) => toast.error('Save failed', (error as Error).message),
-                },
-              )
+              })
             }}
           >
             <Input
@@ -342,8 +451,21 @@ export function MastersPage() {
                 const to = next.findIndex((entry) => entry.id === item.id)
                 const [moved] = next.splice(from, 1)
                 next.splice(to, 0, moved)
-                reorder.mutate(next)
                 setDraggedId(null)
+                setPending({
+                  title: 'Change sequence',
+                  message: (
+                    <p>
+                      Move <span className="font-semibold text-slate-900">{moved.name}</span> to
+                      position {to + 1} in {kindLabel}?
+                    </p>
+                  ),
+                  confirmLabel: 'Save',
+                  run: async () => {
+                    await reorder.mutateAsync(next)
+                    toast.success('Sequence updated')
+                  },
+                })
               }}
             >
               <Td>
@@ -363,20 +485,52 @@ export function MastersPage() {
                         event.target.value = String(item.sort_order)
                         return
                       }
-                      save.mutate(
-                        { ...item, sort_order: next },
-                        {
-                          onError: (error) =>
-                            toast.error('Sequence update failed', (error as Error).message),
+                      const field = event.target
+                      setPending({
+                        title: 'Change sequence',
+                        message: (
+                          <p>
+                            Change the sequence of{' '}
+                            <span className="font-semibold text-slate-900">{item.name}</span> from{' '}
+                            {item.sort_order} to {next}?
+                          </p>
+                        ),
+                        confirmLabel: 'Save',
+                        run: async () => {
+                          await save.mutateAsync({ ...item, sort_order: next })
+                          toast.success('Sequence updated')
                         },
-                      )
+                        onCancel: () => {
+                          field.value = String(item.sort_order)
+                        },
+                      })
                     }}
                   />
                 </span>
               </Td>
               <Td className="font-medium">{item.name}</Td>
               <Td>
-                <button onClick={() => save.mutate({ ...item, is_active: !item.is_active })}>
+                <button
+                  aria-label={`Toggle status of ${item.name}`}
+                  onClick={() =>
+                    setPending({
+                      title: item.is_active ? 'Deactivate item' : 'Activate item',
+                      message: (
+                        <p>
+                          Mark <span className="font-semibold text-slate-900">{item.name}</span> as{' '}
+                          {item.is_active ? 'Inactive' : 'Active'}?
+                          {item.is_active &&
+                            ' It will stop appearing in dropdowns until it is activated again.'}
+                        </p>
+                      ),
+                      confirmLabel: 'Save',
+                      run: async () => {
+                        await save.mutateAsync({ ...item, is_active: !item.is_active })
+                        toast.success(item.is_active ? 'Marked inactive' : 'Marked active')
+                      },
+                    })
+                  }
+                >
                   <Badge tone={item.is_active ? 'green' : 'slate'}>
                     {item.is_active ? 'Active' : 'Inactive'}
                   </Badge>
@@ -395,8 +549,20 @@ export function MastersPage() {
                   </button>
                   <button
                     onClick={() =>
-                      remove.mutate(item.id, {
-                        onError: (error) => toast.error('Delete failed', (error as Error).message),
+                      setPending({
+                        title: 'Delete item',
+                        message: (
+                          <p>
+                            Delete <span className="font-semibold text-slate-900">{item.name}</span>{' '}
+                            from {kindLabel}? This cannot be undone.
+                          </p>
+                        ),
+                        confirmLabel: 'Delete',
+                        danger: true,
+                        run: async () => {
+                          await remove.mutateAsync(item.id)
+                          toast.success('Master deleted')
+                        },
                       })
                     }
                     aria-label={`Delete ${item.name}`}
@@ -441,6 +607,60 @@ export function MastersPage() {
           </div>
         </CardBody>
       </Card>
+
+      {pending && (
+        <Modal open onClose={cancelPending} title={pending.title} testid="master-confirm-modal">
+          <div className="space-y-4">
+            <div className="flex gap-3">
+              <div
+                className={
+                  'flex size-9 shrink-0 items-center justify-center rounded-full ' +
+                  (pending.danger ? 'bg-red-50' : 'bg-amber-50')
+                }
+              >
+                <TriangleAlert
+                  className={'size-5 ' + (pending.danger ? 'text-red-600' : 'text-amber-600')}
+                />
+              </div>
+              <div className="text-sm text-slate-600">{pending.message}</div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                data-testid="master-confirm-cancel"
+                disabled={applying}
+                onClick={cancelPending}
+              >
+                Cancel
+              </Button>
+              {pending.discard && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  data-testid="master-confirm-discard"
+                  disabled={applying}
+                  onClick={() => {
+                    pending.discard?.()
+                    setPending(null)
+                  }}
+                >
+                  Discard
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant={pending.danger ? 'danger' : 'primary'}
+                data-testid="master-confirm-save"
+                loading={applying}
+                onClick={confirmPending}
+              >
+                {pending.confirmLabel}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
