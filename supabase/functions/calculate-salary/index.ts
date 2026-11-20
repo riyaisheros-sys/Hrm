@@ -4,10 +4,7 @@
 // the payslip, and upserts a salary_run.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders, json } from '../_shared/cors.ts'
-
-const round2 = (n: number) => Math.round(n * 100) / 100
-const sumKind = (rows: Array<{ kind: string; amount: number }>, kind: string) =>
-  rows.filter((r) => r.kind === kind).reduce((s, r) => s + Number(r.amount), 0)
+import { computePayroll } from './calc.ts'
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -39,8 +36,18 @@ Deno.serve(async (req: Request) => {
     // Finalize days the employee never punched out of, so salary uses the same
     // hours-based status the attendance monitor and report show.
     await admin.rpc('close_stale_attendance', { p_user: userId })
-    const [policyRes, profileRes, daysRes, leavesRes, complRes, adjRes, callerUser] =
-      await Promise.all([
+    const [
+      policyRes,
+      profileRes,
+      daysRes,
+      leavesRes,
+      complRes,
+      adjRes,
+      callerUser,
+      holidaysRes,
+      attCfgRes,
+      personRes,
+    ] = await Promise.all([
         admin.from('salary_policy').select('*').eq('id', true).single(),
         admin.from('salary_profiles').select('monthly_ctc').eq('user_id', userId).maybeSingle(),
         admin
@@ -67,6 +74,13 @@ Deno.serve(async (req: Request) => {
           .eq('user_id', userId)
           .eq('period_month', periodStart),
         caller.auth.getUser(),
+        admin
+          .from('holidays')
+          .select('holiday_date,name')
+          .gte('holiday_date', periodStart)
+          .lt('holiday_date', endStr),
+        admin.from('attendance_config').select('timezone').eq('id', true).maybeSingle(),
+        admin.from('profiles').select('created_at').eq('id', userId).maybeSingle(),
       ])
 
     const policy = policyRes.data
@@ -77,89 +91,51 @@ Deno.serve(async (req: Request) => {
     const compliantDays = (complRes.data ?? []) as string[]
     const adjustments = (adjRes.data ?? []) as Array<{ kind: string; amount: number }>
 
-    const present = days.filter((d) => d.status === 'full_day' || d.status === 'present').length
-    const half = days.filter((d) => d.status === 'half_day').length
-    const quarter = days.filter((d) => d.status === 'quarter_day').length
-    const absent = days.filter((d) => d.status === 'absent').length
-    const lateCount = days.filter((d) => d.is_late).length
-    const overtimeMinutes = days.reduce((s, d) => s + (d.overtime_minutes ?? 0), 0)
-
     const paidLeaveDays = leaves
       // deno-lint-ignore no-explicit-any
       .filter((l: any) => l.leave_types?.is_paid)
       .reduce((s: number, l: { days: number }) => s + Number(l.days), 0)
 
-    const workingDates = days
-      .filter((d) => ['full_day', 'present', 'half_day', 'quarter_day'].includes(d.status))
-      .map((d) => d.work_date)
-    // A compliant day = slots covered the full working window, or admin unlock.
-    const compliantDates = new Set(compliantDays)
-    const nonCompliant = workingDates.filter((d) => !compliantDates.has(d)).length
+    const tz = attCfgRes.data?.timezone ?? 'Asia/Kolkata'
+    const dateIn = (d: Date) => new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d)
+    const createdAt = personRes.data?.created_at
 
-    const wdpm = Number(policy.working_days_per_month)
-    const perDay = wdpm > 0 ? monthlyCtc / wdpm : 0
-    const paidUnits =
-      present +
-      half * Number(policy.half_day_factor) +
-      quarter * Number(policy.quarter_day_factor) +
-      (policy.paid_leave_paid ? paidLeaveDays : 0)
-
-    const baseEarned = round2(perDay * paidUnits)
-    const overtimePay = round2((overtimeMinutes / 60) * Number(policy.overtime_rate_per_hour))
-    const latePenalty = round2(lateCount * Number(policy.late_penalty_per_day))
-    const planningPenalty = round2(nonCompliant * Number(policy.planning_penalty_per_day))
-    const incentives = round2(sumKind(adjustments, 'incentive'))
-    const increments = round2(sumKind(adjustments, 'increment'))
-    const adjPenalty = round2(sumKind(adjustments, 'penalty'))
-    const penalties = round2(adjPenalty + latePenalty + planningPenalty)
-    const gross = round2(baseEarned + overtimePay + incentives + increments)
-
-    // Statutory deductions (default 0 in policy → no effect unless configured).
-    const pf = round2((baseEarned * Number(policy.pf_percent)) / 100)
-    const esic = round2((gross * Number(policy.esic_percent)) / 100)
-    const professionalTax = round2(Number(policy.professional_tax))
-    const tds = round2((gross * Number(policy.tds_percent)) / 100)
-    const statutory = round2(pf + esic + professionalTax + tds)
-    const net = round2(gross - penalties - statutory)
+    const calc = computePayroll({
+      month,
+      today: dateIn(new Date()),
+      monthlyCtc,
+      policy,
+      days,
+      paidLeaveDays,
+      holidays: holidaysRes.data ?? [],
+      compliantDates: compliantDays,
+      adjustments,
+      joinedOn: createdAt ? dateIn(new Date(createdAt)) : null,
+    })
 
     const row = {
       user_id: userId,
       period_month: periodStart,
-      present_days: present,
-      half_days: half,
-      quarter_days: quarter,
-      absent_days: absent,
+      present_days: calc.present,
+      half_days: calc.half,
+      quarter_days: calc.quarter,
+      absent_days: calc.absent,
       paid_leave_days: paidLeaveDays,
-      late_count: lateCount,
-      overtime_minutes: overtimeMinutes,
-      planning_noncompliant_days: nonCompliant,
-      base_earned: baseEarned,
-      overtime_pay: overtimePay,
-      incentives,
-      increments,
-      penalties,
-      pf,
-      esic,
-      professional_tax: professionalTax,
-      tds,
-      gross,
-      net,
-      breakdown: {
-        perDay: round2(perDay),
-        paidUnits,
-        baseEarned,
-        overtimePay,
-        latePenalty,
-        planningPenalty,
-        adjPenalty,
-        incentives,
-        increments,
-        pf,
-        esic,
-        professionalTax,
-        tds,
-        statutory,
-      },
+      late_count: calc.lateCount,
+      overtime_minutes: calc.overtimeMinutes,
+      planning_noncompliant_days: calc.nonCompliant,
+      base_earned: calc.baseEarned,
+      overtime_pay: calc.overtimePay,
+      incentives: calc.incentives,
+      increments: calc.increments,
+      penalties: calc.penalties,
+      pf: calc.pf,
+      esic: calc.esic,
+      professional_tax: calc.professionalTax,
+      tds: calc.tds,
+      gross: calc.gross,
+      net: calc.net,
+      breakdown: calc.breakdown,
       status: 'finalized',
       computed_by: callerUser.data.user?.id ?? null,
       computed_at: new Date().toISOString(),

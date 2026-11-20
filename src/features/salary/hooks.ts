@@ -97,6 +97,36 @@ export function useUpsertSalaryProfile() {
   })
 }
 
+export type SalaryPolicy = Tables<'salary_policy'>
+
+/** The single org-wide salary policy row (rates, factors, switches). */
+export function useSalaryPolicy() {
+  return useQuery({
+    queryKey: ['salary-policy'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('salary_policy').select('*').maybeSingle()
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+export function useUpdateSalaryPolicy() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (patch: Partial<SalaryPolicy>) => {
+      const { data, error } = await supabase
+        .from('salary_policy')
+        .update(patch)
+        .eq('id', true)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to change the salary policy')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['salary-policy'] }),
+  })
+}
+
 export function useAdjustments(userId: string | null, periodMonth: string) {
   return useQuery({
     queryKey: ['salary-adjustments', userId, periodMonth],

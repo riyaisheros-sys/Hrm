@@ -14,6 +14,7 @@ import {
   type SalaryComponent,
   type SalaryRun,
 } from './hooks'
+import { SalaryCalculation, SundayHolidaySwitch } from './SalaryCalculation'
 import { generateLetterPdf } from '@/lib/pdfLetter'
 import { useUsers } from '@/features/admin/users/hooks'
 import { useProfile } from '@/features/rbac/profile-context'
@@ -141,7 +142,10 @@ export function SalaryAdminPage() {
 
         <Card className="lg:col-span-2">
           <CardBody>
-            <p className="mb-3 text-sm font-medium text-slate-500">Computed payslip</p>
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <p className="text-sm font-medium text-slate-500">Computed payslip</p>
+              <SundayHolidaySwitch canManage={canManage} />
+            </div>
             {!run ? (
               <p className="text-sm text-slate-400" data-testid="salary-prompt">
                 Choose an employee + month and click Compute.
@@ -168,6 +172,14 @@ export function SalaryAdminPage() {
                   <Stat label="Quarter" value={run.quarter_days} />
                   <Stat label="Absent" value={run.absent_days} />
                   <Stat label="Paid leave" value={run.paid_leave_days} />
+                  <Stat
+                    label="Sundays paid"
+                    value={Number((run.breakdown as Record<string, unknown> | null)?.sundays ?? 0)}
+                  />
+                  <Stat
+                    label="Holidays paid"
+                    value={Number((run.breakdown as Record<string, unknown> | null)?.holidays ?? 0)}
+                  />
                   <Stat label="Late" value={run.late_count} />
                   <Stat label="Overtime (min)" value={run.overtime_minutes} />
                   <Stat label="Planning gaps" value={run.planning_noncompliant_days} />
@@ -181,6 +193,7 @@ export function SalaryAdminPage() {
                   <Stat label="Prof. tax" value={run.professional_tax} />
                   <Stat label="TDS" value={run.tds} />
                 </dl>
+                <SalaryCalculation run={run} />
                 <div className="mt-4">
                   <Button
                     size="sm"

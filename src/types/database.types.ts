@@ -2581,6 +2581,7 @@ export type Database = {
           tds_percent: number
           updated_at: string
           working_days_per_month: number
+          pay_sundays_holidays: boolean
         }
         Insert: {
           esic_percent?: number
@@ -2596,6 +2597,7 @@ export type Database = {
           tds_percent?: number
           updated_at?: string
           working_days_per_month?: number
+          pay_sundays_holidays?: boolean
         }
         Update: {
           esic_percent?: number
@@ -2611,6 +2613,7 @@ export type Database = {
           tds_percent?: number
           updated_at?: string
           working_days_per_month?: number
+          pay_sundays_holidays?: boolean
         }
         Relationships: []
       }
