@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import {
   Award,
   BookText,
@@ -41,7 +41,13 @@ import { useViewMode } from '@/features/view-mode/view-mode-context'
 import { HealthBadge } from '@/features/health/HealthBadge'
 import { SidebarCustomizer } from './SidebarCustomizer'
 import { useSidebarPreferences } from './sidebar-preferences'
-import { groupForNav, sidebarGroupsFor } from './sidebar-groups'
+import {
+  groupForNav,
+  isMastersOnlyRoute,
+  MASTERS_ONLY_NAV,
+  MASTERS_PERMISSION,
+  sidebarGroupsFor,
+} from './sidebar-groups'
 import { useEmployeeSidebarPolicy } from '@/features/admin/employee-panel/hooks'
 import { NotificationsBell } from '@/features/notifications/NotificationsBell'
 import { useToast } from '@/components/ui/toast-context'
@@ -277,8 +283,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Org-wide policy: admin can hide specific items for ALL employees. Applies
   // only in the Employee view — admins keep full sidebar access regardless.
   const { data: employeeSidebarPolicy } = useEmployeeSidebarPolicy()
+  // Setup pages live behind Centralized Masters for anyone who can open it.
+  const viaMasters = mode === 'admin' && hasPermission(MASTERS_PERMISSION)
+  const { pathname } = useLocation()
+  const onMastersPage = viaMasters && isMastersOnlyRoute(pathname)
   const permittedItems = (mode === 'admin' ? adminNav : employeeNav)
     .filter((item) => !item.perm || hasPermission(item.perm))
+    .filter((item) => !(viaMasters && item.testid in MASTERS_ONLY_NAV))
     .filter((item) => {
       if (mode !== 'employee') return true
       const visible = employeeSidebarPolicy?.get(item.testid)
@@ -373,7 +384,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         cn(
                           'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                           preferences.collapsed && 'lg:justify-center lg:px-2',
-                          isActive
+                          isActive || (onMastersPage && item.testid === 'nav-masters')
                             ? 'bg-brand-50 text-brand-700'
                             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
                         )
@@ -481,6 +492,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8" data-testid="app-main">
+          {onMastersPage && (
+            <Link
+              to="/admin/masters"
+              data-testid="back-to-masters"
+              className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-brand-700 hover:underline"
+            >
+              ← Centralized Masters
+            </Link>
+          )}
           {children}
         </main>
       </div>

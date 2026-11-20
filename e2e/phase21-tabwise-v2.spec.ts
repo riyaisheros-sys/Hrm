@@ -145,7 +145,10 @@ test.describe('Phase 21 — tab-wise upgrades v2', () => {
   test('7-8-11. renames: Communication, Doc Vault, Users', async ({ page }) => {
     await loginAs(page, sunil)
 
-    await expect(page.getByTestId('nav-onboarding')).toContainText('Communication Templates')
+    // Communication Templates is a setup page: listed in Centralised Masters.
+    await page.getByTestId('nav-masters').click()
+    await expect(page.getByTestId('master-link-communication-templates')).toBeVisible()
+    await page.goBack()
     await expect(page.getByTestId('nav-documents')).toContainText('Doc Vault')
     await expect(page.getByTestId('nav-users')).toContainText('Users')
     await expect(page.getByTestId('nav-visitors')).toContainText('Visitors & Meetings')

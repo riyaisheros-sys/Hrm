@@ -39,7 +39,9 @@ test.describe('Phase 1 — auth, RBAC, dual view & hierarchy', () => {
 
   test('Admin can create, configure permissions on, and delete a role', async ({ page }) => {
     await loginAs(page, sunil)
-    await page.getByTestId('nav-roles').click()
+    // Organization Roles is a setup page: opened from Centralised Masters.
+    await page.getByTestId('nav-masters').click()
+    await page.getByTestId('master-link-organization-roles-&-access').click()
     await expect(page.getByTestId('roles-page')).toBeVisible()
 
     // Create

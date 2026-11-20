@@ -78,6 +78,29 @@ export const SIDEBAR_GROUP_FOR: Record<string, Record<string, string>> = {
   },
 }
 
+/**
+ * Setup pages that are opened from Centralised Masters ("Open manager") and so
+ * are left out of the admin side panel (client ask, 20 Nov). They only drop out
+ * for people who can open Masters; everyone else keeps the direct entry.
+ */
+export const MASTERS_ONLY_NAV: Record<string, string> = {
+  'nav-attendance-settings': '/admin/attendance-settings',
+  'nav-kra-kpi': '/admin/kra-kpi',
+  'nav-roles': '/admin/roles',
+  'nav-hierarchy': '/admin/hierarchy',
+  'nav-employee-panel': '/admin/employee-panel',
+  'nav-workflows': '/admin/workflows',
+  'nav-onboarding': '/admin/onboarding',
+}
+export const MASTERS_PERMISSION = 'users.manage'
+
+/** True when `pathname` is one of the setup pages reached through Masters. */
+export function isMastersOnlyRoute(pathname: string): boolean {
+  return Object.values(MASTERS_ONLY_NAV).some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  )
+}
+
 /** Group id for a nav testid (unmapped items fall into Entries). */
 export function groupForNav(mode: 'admin' | 'employee', testid: string): string {
   return SIDEBAR_GROUP_FOR[mode]?.[testid] ?? 'entries'
