@@ -54,35 +54,52 @@ type LinkedMaster = {
 
 const KINDS: Array<SimpleMaster | LinkedMaster> = [
   // People
+  { kind: 'linked', module: 'People', label: 'Users / Employees', href: '/admin/users', note: 'Add, edit, roles, KRA / KPI, leave quota' },
   { kind: 'linked', module: 'People', label: 'Companies', href: '/admin/hierarchy' },
   { kind: 'linked', module: 'People', label: 'Departments', href: '/admin/hierarchy' },
   { kind: 'linked', module: 'People', label: 'Teams', href: '/admin/hierarchy' },
-  { kind: 'linked', module: 'People', label: 'Roles & Access', href: '/admin/roles' },
+  { kind: 'linked', module: 'People', label: 'Organization Roles & Access', href: '/admin/roles' },
+  { kind: 'linked', module: 'People', label: 'Employee Panel', href: '/admin/employee-panel', note: 'What employees see in entries & dashboard' },
+  { kind: 'linked', module: 'People', label: 'Lifecycle', href: '/admin/lifecycle' },
 
   // Tasks
   { kind: 'simple', value: 'task_categories', label: 'Task Groups', module: 'Tasks' },
+  { kind: 'linked', module: 'Tasks', label: 'Tasks', href: '/tasks' },
   { kind: 'linked', module: 'Tasks', label: 'Task Statuses', href: '/tasks', note: 'Open Tasks → Statuses dialog' },
+  { kind: 'linked', module: 'Tasks', label: 'Task capacity', href: '/tasks', note: 'Open Tasks → Statuses dialog' },
 
   // Attendance
+  { kind: 'linked', module: 'Attendance', label: 'Attendance Monitor', href: '/admin/attendance' },
   { kind: 'linked', module: 'Attendance', label: 'Locations (geo-fence)', href: '/admin/attendance', note: 'Attendance Monitor → Locations' },
   { kind: 'linked', module: 'Attendance', label: 'Working-hours config', href: '/admin/attendance', note: 'Attendance Monitor → Settings' },
+  { kind: 'linked', module: 'Attendance', label: 'Monitoring', href: '/admin/monitoring' },
+
+  // Planning
+  { kind: 'linked', module: 'Planning', label: 'Planning monitor', href: '/admin/planning', note: 'Slots, punch locks and admin unlocks' },
+  { kind: 'linked', module: 'Planning', label: 'Planning config', href: '/admin/planning', note: 'Slot interval and working window' },
 
   // Leave
   { kind: 'simple', value: 'leave_types', label: 'Leave Types', module: 'Leave' },
+  { kind: 'linked', module: 'Leave', label: 'Leave approvals', href: '/admin/leave' },
   { kind: 'linked', module: 'Leave', label: 'Holidays', href: '/admin/leave' },
 
   // Performance / Growth
   { kind: 'simple', value: 'appraisal_types', label: 'Appraisal Types', module: 'Performance' },
   { kind: 'linked', module: 'Performance', label: 'Appraisal Cycles', href: '/admin/appraisal' },
+  { kind: 'linked', module: 'Performance', label: 'Appraisals', href: '/admin/appraisal' },
 
   // Documents / Policies
   { kind: 'simple', value: 'document_types', label: 'Document Types', module: 'Documents' },
+  { kind: 'linked', module: 'Documents', label: 'Doc Vault', href: '/admin/documents' },
   { kind: 'simple', value: 'policy_categories', label: 'Policy Categories', module: 'Policies' },
+  { kind: 'linked', module: 'Policies', label: 'Policies', href: '/admin/policies' },
 
   // Helpdesk
   { kind: 'simple', value: 'helpdesk_categories', label: 'Helpdesk Categories', module: 'Helpdesk' },
+  { kind: 'linked', module: 'Helpdesk', label: 'Helpdesk tickets', href: '/helpdesk' },
 
   // Compensation
+  { kind: 'linked', module: 'Compensation', label: 'Salary', href: '/admin/salary' },
   { kind: 'linked', module: 'Compensation', label: 'Payslip Templates', href: '/admin/salary' },
   { kind: 'linked', module: 'Compensation', label: 'Salary policy', href: '/admin/salary' },
 
@@ -95,6 +112,20 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
 
   // Recruitment
   { kind: 'linked', module: 'Recruitment', label: 'Job Openings', href: '/admin/recruitment' },
+  { kind: 'linked', module: 'Recruitment', label: 'Candidates', href: '/admin/recruitment' },
+
+  // Assets
+  { kind: 'linked', module: 'Assets', label: 'Assets', href: '/admin/assets', note: 'Inventory and assignment history' },
+
+  // Engagement
+  { kind: 'linked', module: 'Engagement', label: 'Recognition', href: '/recognition' },
+  { kind: 'linked', module: 'Engagement', label: 'Visitors & Meetings', href: '/admin/visitors' },
+  { kind: 'linked', module: 'Engagement', label: 'Notice Board', href: '/announcements' },
+
+  // Reports & system
+  { kind: 'linked', module: 'Reports & System', label: 'Reports', href: '/admin/reports' },
+  { kind: 'linked', module: 'Reports & System', label: 'Audit Log', href: '/admin/audit' },
+  { kind: 'linked', module: 'Reports & System', label: 'Dashboard', href: '/' },
 ]
 
 const SIMPLE_KINDS = KINDS.filter(
@@ -302,7 +333,7 @@ export function MastersPage() {
         {MODULES.map((mod) => {
           const children = KINDS.filter((k) => k.module === mod)
           return (
-            <div key={mod} data-testid={`master-module-${mod.toLowerCase()}`}>
+            <div key={mod} data-testid={`master-module-${mod.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}>
               <div className="mb-1 font-semibold uppercase tracking-wide text-slate-500">
                 {mod}
               </div>
