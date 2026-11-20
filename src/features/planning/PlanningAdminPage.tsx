@@ -6,6 +6,7 @@ import {
   usePlanningConfig,
   usePlanningRealtime,
   usePunchLockOverview,
+  useUpdatePlanningConfig,
   useUnlockHistory,
   useUnlockPlanning,
   useUserDayPlan,
@@ -81,6 +82,7 @@ export function PlanningAdminPage() {
             ))}
           </Select>
         </div>
+        <LateGraceSetting />
       </div>
 
       <Table data-testid="planning-compliance-table">
@@ -155,6 +157,71 @@ export function PlanningAdminPage() {
 }
 
 /** Unlocking overrides the punch lock, so it always needs a written reason. */
+/**
+ * How long after a slot ends an entry may still be written before it counts as
+ * a late entry (shown red in reports, scored by Planning discipline).
+ */
+function LateGraceSetting() {
+  const { data: config } = usePlanningConfig()
+  const update = useUpdatePlanningConfig()
+  const toast = useToast()
+  const [draft, setDraft] = useState<string | null>(null)
+  // The column arrives with a migration; until then the rule runs on 30 minutes.
+  const available = !!config && 'late_entry_grace_minutes' in config
+  const saved = String(
+    (config as { late_entry_grace_minutes?: number } | undefined)?.late_entry_grace_minutes ?? 30,
+  )
+  const value = draft ?? saved
+  const dirty = draft !== null && draft !== saved
+
+  const save = () => {
+    const minutes = Number(value)
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) {
+      toast.error('Enter whole minutes between 0 and 1440')
+      return
+    }
+    update.mutate({ late_entry_grace_minutes: minutes } as never, {
+      onSuccess: () => {
+        toast.success(`Entries more than ${minutes} min after a slot ends now count as late`)
+        setDraft(null)
+      },
+      onError: (error) => toast.error(error.message),
+    })
+  }
+
+  return (
+    <div
+      className="ml-auto flex items-center gap-2"
+      title="A planning entry written later than this after its slot ended is a late entry: red in reports and counted by the Planning discipline KRA / KPI."
+    >
+      <Label htmlFor="pa-late-grace" className="mb-0">
+        Late entry after (min)
+      </Label>
+      <Input
+        id="pa-late-grace"
+        data-testid="planning-late-grace"
+        type="number"
+        min={0}
+        max={1440}
+        value={value}
+        disabled={!available}
+        onChange={(e) => setDraft(e.target.value)}
+        className="w-20"
+      />
+      {dirty && (
+        <Button
+          size="sm"
+          data-testid="planning-late-grace-save"
+          onClick={save}
+          disabled={update.isPending}
+        >
+          Save
+        </Button>
+      )}
+    </div>
+  )
+}
+
 function UnlockModal({
   user,
   onClose,

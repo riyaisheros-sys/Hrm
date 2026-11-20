@@ -21,6 +21,8 @@ export interface ExtraTable {
   name: string
   columns: ReportColumn[]
   rows: Row[]
+  /** Optional cell colours for this table in the PDF. */
+  fill?: CellFill
 }
 
 const text = (value: unknown) => (value == null ? '' : String(value))
@@ -132,7 +134,7 @@ export function exportPdf(
     }
     doc.setFontSize(11)
     doc.text(section.name, 10, y + 9)
-    y = table(section.columns, section.rows, y + 12)
+    y = table(section.columns, section.rows, y + 12, section.fill)
   }
 
   const pages = doc.getNumberOfPages()

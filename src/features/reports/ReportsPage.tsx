@@ -12,6 +12,7 @@ import { usePersistedState } from '@/lib/usePersistedState'
 import { StickyHeader } from '@/components/ui/StickyHeader'
 import { Modal } from '@/components/ui/Modal'
 import { formatDate, formatDateTime } from '@/lib/format'
+import { formatLateBy } from '@/features/planning/late'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -49,6 +50,15 @@ const attendanceFill: CellFill = (row, key) => {
   if (key === 'status' && meta) return meta.rgb
   return row._sunday ? SUNDAY_META.rgb : undefined
 }
+
+// Late planning entries (a discipline flag) are shaded red, on screen and in
+// the PDF; the Entry Timing cell itself is a stronger red.
+const LATE_ROW: [number, number, number] = [254, 226, 226]
+const LATE_CELL: [number, number, number] = [252, 165, 165]
+const planningFill: CellFill = (row, key) =>
+  row._late ? (key === 'entry' ? LATE_CELL : LATE_ROW) : undefined
+const planningExtraFill: CellFill = (row, key) =>
+  row._late ? (key === 'timing' ? LATE_CELL : LATE_ROW) : undefined
 
 export function ReportsPage() {
   // Reports filters persist across refresh so admins keep their last choice.
@@ -154,6 +164,9 @@ export function ReportsPage() {
           planned: slot.planned,
           working: slot.working,
           challenges: slot.challenges,
+          entered: formatDateTime(slot.enteredAt),
+          timing: slot.lateMinutes > 0 ? `LATE by ${formatLateBy(slot.lateMinutes)}` : 'On time',
+          _late: slot.lateMinutes > 0,
         })
       for (const h of history)
         historyRows.push({
@@ -187,8 +200,11 @@ export function ReportsPage() {
           { key: 'planned', label: 'Planned' },
           { key: 'working', label: 'Work done / update' },
           { key: 'challenges', label: 'Challenges' },
+          { key: 'entered', label: 'Entered at' },
+          { key: 'timing', label: 'Entry timing' },
         ],
         rows: planningRows,
+        fill: planningExtraFill,
       })
     if (showHistory)
       extra.push({
@@ -236,7 +252,11 @@ export function ReportsPage() {
                       data.filename,
                       visibleColumns,
                       out.rows,
-                      type === 'attendance' ? attendanceFill : undefined,
+                      type === 'attendance'
+                        ? attendanceFill
+                        : type === 'planning'
+                          ? planningFill
+                          : undefined,
                       { subtitle: out.subtitle, extra: out.extra },
                     )
                   }
@@ -297,6 +317,19 @@ export function ReportsPage() {
             className="w-40"
           />
         </div>
+        <div>
+          <Label htmlFor="report-to" className="text-xs text-slate-500">
+            To
+          </Label>
+          <Input
+            id="report-to"
+            data-testid="report-to"
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="w-40"
+          />
+        </div>
         {type === 'attendance' && (
           <div>
             <Label htmlFor="report-attendance-status" className="text-xs text-slate-500">
@@ -319,6 +352,24 @@ export function ReportsPage() {
               <option value="overtime">With overtime</option>
               <option value="missed_punch_out">Missed punch-out</option>
               <option value="corrected">Manually corrected</option>
+            </Select>
+          </div>
+        )}
+        {type === 'planning' && (
+          <div>
+            <Label htmlFor="report-entry-timing" className="text-xs text-slate-500">
+              Entry timing
+            </Label>
+            <Select
+              id="report-entry-timing"
+              data-testid="report-entry-timing"
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              className="w-44"
+            >
+              <option value="">All entries</option>
+              <option value="late">Late entries only</option>
+              <option value="on_time">On time only</option>
             </Select>
           </div>
         )}
@@ -496,19 +547,6 @@ export function ReportsPage() {
           </>
         )}
         <div>
-          <Label htmlFor="report-to" className="text-xs text-slate-500">
-            To
-          </Label>
-          <Input
-            id="report-to"
-            data-testid="report-to"
-            type="date"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
-            className="w-40"
-          />
-        </div>
-        <div>
           <Label htmlFor="report-employee" className="text-xs text-slate-500">
             Employee
           </Label>
@@ -573,6 +611,13 @@ export function ReportsPage() {
             data-testid="report-total-records"
           >
             Total Records: {sortedRows.length}
+            {type === 'planning' && (
+              <span className="ml-3 inline-flex gap-2" data-testid="planning-late-count">
+                <Badge tone="red">
+                  Late entries: {sortedRows.filter((r) => r._late).length}
+                </Badge>
+              </span>
+            )}
             {type === 'planning_lock' && (
               <span className="ml-3 inline-flex gap-2" data-testid="lock-report-counts">
                 <Badge tone="red">
@@ -621,7 +666,11 @@ export function ReportsPage() {
                 <tr
                   key={i}
                   data-testid="report-row"
-                  className={cn(type === 'attendance' && !!row._sunday && 'bg-slate-100/70')}
+                  data-late={row._late ? 'true' : undefined}
+                  className={cn(
+                    type === 'attendance' && !!row._sunday && 'bg-slate-100/70',
+                    !!row._late && 'bg-red-50',
+                  )}
                 >
                   {visibleColumns.map((c) => {
                     const meta =
@@ -667,6 +716,24 @@ export function ReportsPage() {
                         </Td>
                       )
                     }
+                    if (c.key === 'entry' && type === 'planning') {
+                      return (
+                        <Td key={c.key} className="whitespace-nowrap" data-testid="report-entry-timing-cell">
+                          {row._late ? (
+                            <Badge tone="red">{value}</Badge>
+                          ) : (
+                            <span className="text-xs text-emerald-700">{value}</span>
+                          )}
+                        </Td>
+                      )
+                    }
+                    if (c.key === 'planningLate' && Number(row.planningLate) > 0) {
+                      return (
+                        <Td key={c.key}>
+                          <Badge tone="red">{value} late</Badge>
+                        </Td>
+                      )
+                    }
                     return (
                       <Td key={c.key} className={isLong ? 'align-top' : undefined}>
                         {meta ? (
@@ -704,6 +771,8 @@ interface PlanningEntry {
   planned: string
   working: string
   challenges: string
+  enteredAt: string
+  lateMinutes: number
 }
 interface HistoryEntry {
   at: string
@@ -736,7 +805,7 @@ function DetailModal({ detail, onClose }: { detail: DetailView; onClose: () => v
       <p className="mb-3 text-xs text-slate-500">
         {detail.assignee && detail.assignee !== '—' ? `Assignee: ${detail.assignee} · ` : ''}
         {planning
-          ? `${planning.length} planning slot${planning.length === 1 ? '' : 's'} linked to this task, oldest first.`
+          ? `${planning.length} planning slot${planning.length === 1 ? '' : 's'} linked to this task, oldest first. ${planning.filter((p) => p.lateMinutes > 0).length} entered late (shaded red).`
           : `${detail.history?.length ?? 0} status change(s), oldest first.`}
       </p>
       {planning ? (
@@ -750,13 +819,18 @@ function DetailModal({ detail, onClose }: { detail: DetailView; onClose: () => v
                 <th className="px-3 py-2">Planned</th>
                 <th className="px-3 py-2">Work done / update</th>
                 <th className="px-3 py-2">Challenges</th>
+                <th className="w-44 px-3 py-2">Entered</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {planning.map((slot, i) => {
                 const newDate = i === 0 || planning[i - 1].date !== slot.date
                 return (
-                  <tr key={i} className={`align-top ${newDate && i > 0 ? 'border-t-2 border-slate-200' : ''}`}>
+                  <tr
+                    key={i}
+                    data-late={slot.lateMinutes > 0 ? 'true' : undefined}
+                    className={`align-top ${newDate && i > 0 ? 'border-t-2 border-slate-200' : ''} ${slot.lateMinutes > 0 ? 'bg-red-50' : ''}`}
+                  >
                     <td className="px-3 py-2 font-medium whitespace-nowrap text-slate-900">
                       {newDate ? formatDate(slot.date) : ''}
                     </td>
@@ -775,6 +849,16 @@ function DetailModal({ detail, onClose }: { detail: DetailView; onClose: () => v
                     <td className="px-3 py-2 whitespace-pre-wrap text-slate-700">{slot.planned || '—'}</td>
                     <td className="px-3 py-2 whitespace-pre-wrap text-slate-700">{slot.working || '—'}</td>
                     <td className="px-3 py-2 whitespace-pre-wrap text-amber-700">{slot.challenges || '—'}</td>
+                    <td className="px-3 py-2 text-xs whitespace-nowrap text-slate-600">
+                      {formatDateTime(slot.enteredAt)}
+                      {slot.lateMinutes > 0 ? (
+                        <div className="mt-0.5">
+                          <Badge tone="red">Late by {formatLateBy(slot.lateMinutes)}</Badge>
+                        </div>
+                      ) : (
+                        <div className="mt-0.5 text-emerald-700">On time</div>
+                      )}
+                    </td>
                   </tr>
                 )
               })}

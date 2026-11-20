@@ -4,6 +4,11 @@ import type { ReportColumn } from './export'
 import { statusLabel } from '@/features/attendance/status'
 import { formatDate, formatDateTime, formatTime } from '@/lib/format'
 import { getTaskDelay } from '@/features/tasks/delay'
+import {
+  DEFAULT_LATE_GRACE_MINUTES,
+  formatLateBy,
+  planningLateMinutes,
+} from '@/features/planning/late'
 import { APPRAISAL_FORMULA, appraisalMarks, appraisalRating } from '@/features/appraisal/scoring'
 
 export type ReportType =
@@ -68,6 +73,24 @@ export const REPORT_LABELS: Record<ReportType, string> = {
   training: 'Training',
   policies: 'Policies',
   workflows: 'Workflows',
+}
+
+/**
+ * The settings behind "late planning entry" (grace, office timezone, day end).
+ * Read once per report; missing columns fall back to defaults so the reports
+ * keep working on a database that has not had the setting added yet.
+ */
+async function loadLateRule() {
+  const [planning, attendance] = await Promise.all([
+    supabase.from('planning_config').select('*').maybeSingle(),
+    supabase.from('attendance_config').select('timezone').maybeSingle(),
+  ])
+  const cfg = (planning.data ?? {}) as { late_entry_grace_minutes?: number; day_end?: string }
+  return {
+    graceMinutes: cfg.late_entry_grace_minutes ?? DEFAULT_LATE_GRACE_MINUTES,
+    dayEnd: cfg.day_end ?? '18:30',
+    timeZone: attendance.data?.timezone ?? 'Asia/Kolkata',
+  }
 }
 
 type Person = { full_name: string | null; email: string } | null
@@ -145,6 +168,7 @@ interface TaskRow {
     remarks: string | null
     challenges: string | null
     task_name: string | null
+    created_at: string
   }[]
 }
 interface ApprRow {
@@ -338,7 +362,7 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
       .select(
         'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by,to_status:task_statuses!task_status_history_to_status_id_fkey(name),changer:profiles!task_status_history_changed_by_fkey(full_name,email)),planning_slots' +
           (byPlanning ? '!inner' : '') +
-          '(plan_date,start_time,end_time,progress,remarks,challenges,task_name)',
+          '(plan_date,start_time,end_time,progress,remarks,challenges,task_name,created_at)',
       )
     if (f.userId) q = q.eq('assignee_id', f.userId)
     if (!byPlanning) {
@@ -360,9 +384,19 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
         .maybeSingle()
       if (s?.id) q = q.eq('status_id', s.id)
     }
-    const { data, error } = await q.order('created_at', { ascending: false }).limit(1000)
+    const [{ data, error }, rule] = await Promise.all([
+      q.order('created_at', { ascending: false }).limit(1000),
+      loadLateRule(),
+    ])
     if (error) throw error
     const list = (data ?? []) as unknown as TaskRow[]
+    const lateOf = (slot: TaskRow['planning_slots'][number]) =>
+      planningLateMinutes({
+        planDate: slot.plan_date,
+        endTime: slot.end_time,
+        createdAt: slot.created_at,
+        ...rule,
+      })
     return {
       title: 'Task Report',
       filename: 'task-report',
@@ -401,6 +435,7 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
         { key: 'remarks', label: 'Remarks' },
         { key: 'planningUpdates', label: 'Planning Updates' },
         { key: 'planningCount', label: 'Planning Slots' },
+        { key: 'planningLate', label: 'Late Planning Entries' },
         { key: 'history', label: 'History' },
         { key: 'historyCount', label: 'History Entries' },
       ],
@@ -447,7 +482,9 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
               .filter((x): x is string => !!x)
               .join(' · ')
             const task = s.task_name?.trim() && s.task_name.trim() !== t.title ? ` — ${s.task_name.trim()}` : ''
-            return `${date}${win}${pct}${task}${notes ? ` — ${notes}` : ''}`
+            const late = lateOf(s)
+            const flag = late > 0 ? ` [LATE entry by ${formatLateBy(late)}]` : ''
+            return `${date}${win}${pct}${flag}${task}${notes ? ` — ${notes}` : ''}`
           })
           .join('\n')
         const statusRemark = [...history]
@@ -494,6 +531,8 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
             planned: slot.task_name?.trim() || '',
             working: slot.remarks?.trim() || '',
             challenges: slot.challenges?.trim() || '',
+            enteredAt: slot.created_at,
+            lateMinutes: lateOf(slot),
           })),
           _history: historyChronological.map((h) => ({
             at: h.created_at,
@@ -502,6 +541,7 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
             remarks: h.remarks?.trim() || '',
           })),
           planningCount: planningSlots.length,
+          planningLate: planningSlots.filter((slot) => lateOf(slot) > 0).length,
           history: historySummary || '—',
           historyCount: history.length,
         }
@@ -561,16 +601,21 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     let q = supabase
       .from('planning_slots')
       .select(
-        'plan_date,slot_label,task_name,progress,challenges,remarks,created_at,updated_at, profiles(full_name,email)',
+        'plan_date,slot_label,start_time,end_time,task_name,progress,challenges,remarks,created_at,updated_at, profiles(full_name,email)',
       )
     if (f.userId) q = q.eq('user_id', f.userId)
     if (f.from) q = q.gte('plan_date', f.from)
     if (f.to) q = q.lte('plan_date', f.to)
-    const { data, error } = await q.order('plan_date', { ascending: false }).limit(1000)
+    const [{ data, error }, rule] = await Promise.all([
+      q.order('plan_date', { ascending: false }).limit(1000),
+      loadLateRule(),
+    ])
     if (error) throw error
     type Row = {
       plan_date: string
       slot_label: string
+      start_time: string | null
+      end_time: string | null
       task_name: string
       progress: number
       challenges: string | null
@@ -579,7 +624,20 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
       updated_at: string
       profiles: Person
     }
-    const list = (data ?? []) as unknown as Row[]
+    const list = ((data ?? []) as unknown as Row[])
+      .map((r) => ({
+        r,
+        late: planningLateMinutes({
+          planDate: r.plan_date,
+          endTime: r.end_time,
+          createdAt: r.created_at,
+          ...rule,
+        }),
+      }))
+      // Entry timing filter: 'late' | 'on_time'.
+      .filter(({ late }) =>
+        f.status === 'late' ? late > 0 : f.status === 'on_time' ? late === 0 : true,
+      )
     return {
       title: 'Planning Report',
       filename: 'planning-report',
@@ -592,18 +650,25 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
         { key: 'challenges', label: 'Challenges' },
         { key: 'remarks', label: 'Remarks' },
         { key: 'submitted', label: 'Submitted Time' },
+        { key: 'entry', label: 'Entry Timing' },
         { key: 'updated', label: 'Last Updated Time' },
       ],
-      rows: list.map((r) => ({
+      rows: list.map(({ r, late }) => ({
         employee: name(r.profiles),
         date: formatDate(r.plan_date),
-        slot: r.slot_label,
+        slot:
+          r.start_time && r.end_time
+            ? `${String(r.start_time).slice(0, 5)}-${String(r.end_time).slice(0, 5)}`
+            : r.slot_label,
         task: r.task_name,
         progress: r.progress,
         challenges: r.challenges ?? '',
         remarks: r.remarks ?? '',
         submitted: formatDateTime(r.created_at),
+        entry: late > 0 ? `LATE by ${formatLateBy(late)}` : 'On time',
         updated: formatDateTime(r.updated_at),
+        // Not a column — drives the red highlight on screen and in the PDF.
+        _late: late > 0,
       })),
     }
   },
