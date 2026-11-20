@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { safeFileName } from '@/lib/storageKey'
 import type { Tables } from '@/types/database.types'
 
 export interface UserRow extends Tables<'profiles'> {
@@ -39,7 +40,7 @@ export interface ProfileUpdate {
 }
 
 export async function uploadProfilePicture(userId: string, file: File) {
-  const path = `avatars/${userId}/${crypto.randomUUID()}-${file.name}`
+  const path = `avatars/${userId}/${crypto.randomUUID()}-${safeFileName(file.name)}`
   const uploaded = await supabase.storage.from('documents').upload(path, file)
   if (uploaded.error) throw uploaded.error
   const signed = await supabase.storage.from('documents').createSignedUrl(path, 60 * 60 * 24 * 365)

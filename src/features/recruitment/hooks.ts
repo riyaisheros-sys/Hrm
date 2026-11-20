@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { safeFileName } from '@/lib/storageKey'
 import type { Tables } from '@/types/database.types'
 
 export type Opening = Tables<'job_openings'>
@@ -166,7 +167,7 @@ export function useUploadCandidateDocument() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: { candidateId: string; title: string; file: File }) => {
-      const path = `candidates/${input.candidateId}/${crypto.randomUUID()}-${input.file.name}`
+      const path = `candidates/${input.candidateId}/${crypto.randomUUID()}-${safeFileName(input.file.name)}`
       const up = await supabase.storage
         .from('documents')
         .upload(path, input.file, { upsert: false })

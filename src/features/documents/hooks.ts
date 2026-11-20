@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { safeFileName } from '@/lib/storageKey'
 import { useAuth } from '@/features/auth/auth-context'
 import type { Tables } from '@/types/database.types'
 
@@ -96,7 +97,7 @@ export function useUploadDocument() {
       title: string
       file: File
     }) => {
-      const path = `${input.employeeId}/${input.docType}/${crypto.randomUUID()}-${input.file.name}`
+      const path = `${input.employeeId}/${input.docType}/${crypto.randomUUID()}-${safeFileName(input.file.name)}`
       const up = await supabase.storage
         .from('documents')
         .upload(path, input.file, { upsert: false })

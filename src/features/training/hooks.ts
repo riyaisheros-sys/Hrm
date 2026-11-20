@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
+import { safeFileName } from '@/lib/storageKey'
 import { useAuth } from '@/features/auth/auth-context'
 import type { Tables } from '@/types/database.types'
 
@@ -77,7 +78,7 @@ export function useUploadTrainingAttachment() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: { moduleId: string; file: File }) => {
-      const path = `training/${input.moduleId}/${crypto.randomUUID()}-${input.file.name}`
+      const path = `training/${input.moduleId}/${crypto.randomUUID()}-${safeFileName(input.file.name)}`
       const up = await supabase.storage
         .from('documents')
         .upload(path, input.file, { upsert: false })
