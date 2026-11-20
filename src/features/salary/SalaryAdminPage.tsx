@@ -7,6 +7,7 @@ import {
   useComputeFnf,
   useComputeSalary,
   useSalaryProfile,
+  useSalaryRun,
   usePayslipTemplates,
   useSavePayslipTemplate,
   useUpsertSalaryProfile,
@@ -15,6 +16,7 @@ import {
   type SalaryRun,
 } from './hooks'
 import { SalaryCalculation, SundayHolidaySwitch } from './SalaryCalculation'
+import { rupees } from './money'
 import { generateLetterPdf } from '@/lib/pdfLetter'
 import { useUsers } from '@/features/admin/users/hooks'
 import { useProfile } from '@/features/rbac/profile-context'
@@ -53,10 +55,23 @@ export function SalaryAdminPage() {
   const { data: adjustments = [] } = useAdjustments(effectiveUser, `${month}-01`)
   const compute = useComputeSalary()
   const toast = useToast()
-  // Keyed by user|month so switching selection shows the right result, no effect.
-  const [runByKey, setRunByKey] = useState<Record<string, SalaryRun>>({})
-  const key = `${effectiveUser}|${month}`
-  const run = runByKey[key] ?? null
+  // The stored payslip for this employee and month shows as soon as the page
+  // opens; Compute (and every change below) replaces it with a fresh one.
+  const { data: savedRun } = useSalaryRun(effectiveUser || null, month)
+  const run: SalaryRun | null = savedRun ?? null
+
+  const runCompute = (announce: boolean) => {
+    if (!effectiveUser || !canManage) return
+    compute.mutate(
+      { userId: effectiveUser, month },
+      {
+        onSuccess: () => {
+          if (announce) toast.success('Salary computed')
+        },
+        onError: (e) => toast.error('Compute failed', (e as Error).message),
+      },
+    )
+  }
 
   return (
     <div data-testid="salary-admin-page">
@@ -94,18 +109,7 @@ export function SalaryAdminPage() {
           data-testid="compute-salary"
           loading={compute.isPending}
           disabled={!canManage}
-          onClick={() =>
-            compute.mutate(
-              { userId: effectiveUser, month },
-              {
-                onSuccess: (r) => {
-                  setRunByKey((prev) => ({ ...prev, [key]: r }))
-                  toast.success('Salary computed')
-                },
-                onError: (e) => toast.error('Compute failed', (e as Error).message),
-              },
-            )
-          }
+          onClick={() => runCompute(true)}
         >
           <Calculator className="size-4" /> Compute
         </Button>
@@ -138,17 +142,18 @@ export function SalaryAdminPage() {
           month={month}
           canManage={canManage}
           adjustments={adjustments}
+          onChanged={() => runCompute(false)}
         />
 
         <Card className="lg:col-span-2">
           <CardBody>
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <p className="text-sm font-medium text-slate-500">Computed payslip</p>
-              <SundayHolidaySwitch canManage={canManage} />
+              <SundayHolidaySwitch canManage={canManage} onChanged={() => runCompute(false)} />
             </div>
             {!run ? (
               <p className="text-sm text-slate-400" data-testid="salary-prompt">
-                Choose an employee + month and click Compute.
+                No payslip computed for this employee and month yet — click Compute.
               </p>
             ) : (
               <div data-testid="salary-result">
@@ -156,13 +161,13 @@ export function SalaryAdminPage() {
                   <div>
                     <p className="text-xs text-slate-500">Gross</p>
                     <p className="text-2xl font-bold text-slate-900" data-testid="salary-gross">
-                      {run.gross}
+                      {rupees(run.gross)}
                     </p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-500">Net</p>
                     <p className="text-2xl font-bold text-emerald-700" data-testid="salary-net">
-                      {run.net}
+                      {rupees(run.net)}
                     </p>
                   </div>
                 </div>
@@ -183,15 +188,15 @@ export function SalaryAdminPage() {
                   <Stat label="Late" value={run.late_count} />
                   <Stat label="Overtime (min)" value={run.overtime_minutes} />
                   <Stat label="Planning gaps" value={run.planning_noncompliant_days} />
-                  <Stat label="Base earned" value={run.base_earned} />
-                  <Stat label="Overtime pay" value={run.overtime_pay} />
-                  <Stat label="Incentives" value={run.incentives} />
-                  <Stat label="Increments" value={run.increments} />
-                  <Stat label="Penalties" value={run.penalties} />
-                  <Stat label="PF" value={run.pf} />
-                  <Stat label="ESIC" value={run.esic} />
-                  <Stat label="Prof. tax" value={run.professional_tax} />
-                  <Stat label="TDS" value={run.tds} />
+                  <Stat label="Base earned" value={rupees(run.base_earned)} />
+                  <Stat label="Overtime pay" value={rupees(run.overtime_pay)} />
+                  <Stat label="Incentives" value={rupees(run.incentives)} />
+                  <Stat label="Increments" value={rupees(run.increments)} />
+                  <Stat label="Penalties" value={rupees(run.penalties)} />
+                  <Stat label="PF" value={rupees(run.pf)} />
+                  <Stat label="ESIC" value={rupees(run.esic)} />
+                  <Stat label="Prof. tax" value={rupees(run.professional_tax)} />
+                  <Stat label="TDS" value={rupees(run.tds)} />
                 </dl>
                 <SalaryCalculation run={run} />
                 <div className="mt-4">
@@ -200,15 +205,15 @@ export function SalaryAdminPage() {
                     variant="outline"
                     data-testid="download-payslip"
                     onClick={() => {
-                      const earnings = `base ${run.base_earned}, overtime ${run.overtime_pay}, incentives ${run.incentives}, increments ${run.increments}`
-                      const deductions = `penalties ${run.penalties}, PF ${run.pf}, ESIC ${run.esic}, professional tax ${run.professional_tax}, TDS ${run.tds}`
+                      const earnings = `base ${rupees(run.base_earned)}, overtime ${rupees(run.overtime_pay)}, incentives ${rupees(run.incentives)}, increments ${rupees(run.increments)}`
+                      const deductions = `penalties ${rupees(run.penalties)}, PF ${rupees(run.pf)}, ESIC ${rupees(run.esic)}, professional tax ${rupees(run.professional_tax)}, TDS ${rupees(run.tds)}`
                       const body = (
                         selectedTemplate?.body_template ||
                         'Pay period: {{month}}\nGross: {{gross}}\nNet: {{net}}\nEarnings: {{earnings}}\nDeductions: {{deductions}}'
                       )
                         .replaceAll('{{month}}', month)
-                        .replaceAll('{{gross}}', String(run.gross))
-                        .replaceAll('{{net}}', String(run.net))
+                        .replaceAll('{{gross}}', rupees(run.gross))
+                        .replaceAll('{{net}}', rupees(run.net))
                         .replaceAll('{{earnings}}', earnings)
                         .replaceAll('{{deductions}}', deductions)
                       void generateLetterPdf(`payslip-${month}`, 'Salary Slip', body.split('\n'), {
@@ -374,9 +379,9 @@ function FnfSection({ canManage }: { canManage: boolean }) {
 
       {result && (
         <div className="mt-4 flex flex-wrap items-center gap-6" data-testid="fnf-result">
-          <Stat label="Final salary" value={result.final_salary} />
-          <Stat label="Leave encashment" value={result.leave_encashment} />
-          <Stat label="Dues" value={result.dues} />
+          <Stat label="Final salary" value={rupees(result.final_salary)} />
+          <Stat label="Leave encashment" value={rupees(result.leave_encashment)} />
+          <Stat label="Dues" value={rupees(result.dues)} />
           <div>
             <p className="text-xs text-slate-500">Net payable</p>
             <p className="text-2xl font-bold text-emerald-700" data-testid="fnf-net">
@@ -421,18 +426,48 @@ const DEFAULT_COMPONENTS: SalaryComponent[] = [
   { label: 'Provident fund', kind: 'deduction', amount: 0 },
 ]
 
-function BaseSalaryCard({
-  userId,
-  month,
-  canManage,
-  adjustments,
-}: {
+interface BaseSalaryCardProps {
   userId: string
   month: string
   canManage: boolean
   adjustments: Array<{ id: string; kind: string; amount: number }>
+  /** Salary or an adjustment changed — the payslip needs recalculating. */
+  onChanged: () => void
+}
+
+/**
+ * Waits for the employee's stored salary before showing the editable rows.
+ * The rows used to be seeded on the first render, before the salary had
+ * loaded, so the card showed 0 everywhere — and Save would then have written
+ * those zeros over the real salary.
+ */
+function BaseSalaryCard(props: BaseSalaryCardProps) {
+  const { data: profile, isLoading, isError } = useSalaryProfile(props.userId || null)
+  if (!props.userId || isLoading || isError) {
+    return (
+      <Card>
+        <CardBody data-testid="salary-breakdown-loading">
+          <p className="text-sm font-medium text-slate-500">Salary breakdown</p>
+          <p className="mt-2 text-sm text-slate-400">
+            {isError ? 'Could not load this salary. Refresh the page.' : 'Loading salary…'}
+          </p>
+        </CardBody>
+      </Card>
+    )
+  }
+  return <SalaryBreakdownEditor {...props} profile={profile ?? null} />
+}
+
+function SalaryBreakdownEditor({
+  userId,
+  month,
+  canManage,
+  adjustments,
+  onChanged,
+  profile,
+}: BaseSalaryCardProps & {
+  profile: { components: unknown; monthly_ctc: number | null } | null
 }) {
-  const { data: profile } = useSalaryProfile(userId)
   const upsertProfile = useUpsertSalaryProfile()
   const toast = useToast()
 
@@ -525,21 +560,21 @@ function BaseSalaryCard({
 
         <dl className="rounded-lg bg-slate-50 p-3 text-sm">
           <div className="flex justify-between">
-            <dt className="text-slate-500">Gross (earnings)</dt>
+            <dt className="text-slate-500">Monthly salary (gross earnings)</dt>
             <dd className="font-medium text-slate-800" data-testid="breakdown-gross">
-              {gross}
+              {rupees(gross)}
             </dd>
           </div>
           <div className="flex justify-between">
             <dt className="text-slate-500">Deductions</dt>
             <dd className="font-medium text-slate-800" data-testid="breakdown-deductions">
-              {deductions}
+              {rupees(deductions)}
             </dd>
           </div>
           <div className="mt-1 flex justify-between border-t border-slate-200 pt-1">
             <dt className="font-medium text-slate-600">Net (in-hand)</dt>
             <dd className="font-bold text-emerald-700" data-testid="breakdown-net">
-              {net}
+              {rupees(net)}
             </dd>
           </div>
         </dl>
@@ -553,7 +588,10 @@ function BaseSalaryCard({
             upsertProfile.mutate(
               { userId, components: rows.filter((r) => r.label.trim()) },
               {
-                onSuccess: () => toast.success('Salary breakdown saved'),
+                onSuccess: () => {
+                  toast.success('Salary saved', 'The payslip is recalculated with it.')
+                  onChanged()
+                },
                 onError: (e) => toast.error('Save failed', (e as Error).message),
               },
             )
@@ -562,7 +600,7 @@ function BaseSalaryCard({
           Save breakdown
         </Button>
 
-        <AdjustmentForm userId={userId} month={month} />
+        <AdjustmentForm userId={userId} month={month} onChanged={onChanged} />
         <ul className="space-y-1 text-sm">
           {adjustments.map((a) => (
             <li key={a.id} className="flex justify-between">
@@ -571,7 +609,7 @@ function BaseSalaryCard({
               >
                 {a.kind}
               </Badge>
-              <span>{a.amount}</span>
+              <span>{rupees(a.amount)}</span>
             </li>
           ))}
         </ul>
@@ -580,7 +618,15 @@ function BaseSalaryCard({
   )
 }
 
-function AdjustmentForm({ userId, month }: { userId: string; month: string }) {
+function AdjustmentForm({
+  userId,
+  month,
+  onChanged,
+}: {
+  userId: string
+  month: string
+  onChanged: () => void
+}) {
   const add = useAddAdjustment()
   const toast = useToast()
   const [kind, setKind] = useState<'incentive' | 'penalty' | 'increment'>('incentive')
@@ -597,6 +643,7 @@ function AdjustmentForm({ userId, month }: { userId: string; month: string }) {
             onSuccess: () => {
               toast.success('Adjustment added')
               setAmount('')
+              onChanged()
             },
             onError: (err) => toast.error('Failed', (err as Error).message),
           },

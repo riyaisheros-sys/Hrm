@@ -1,9 +1,8 @@
 import { useSalaryPolicy, useUpdateSalaryPolicy, type SalaryRun } from './hooks'
 import { useToast } from '@/components/ui/toast-context'
 import { formatDate } from '@/lib/format'
+import { rupees as money } from './money'
 
-const money = (n: unknown) =>
-  Number(n ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const n = (v: unknown) => Number(v ?? 0) || 0
 
 /**
@@ -25,8 +24,7 @@ export function SalaryCalculation({ run }: { run: SalaryRun }) {
       >
         <p className="font-medium text-slate-800">How this salary is calculated</p>
         <p className="mt-1 text-slate-600">
-          Per day {money(b.perDay)} × {n(b.paidUnits)} paid days = base earned{' '}
-          {money(run.base_earned)}.
+          {n(b.paidUnits)} paid days = base earned {money(run.base_earned)}.
         </p>
         <p className="mt-1 text-xs text-amber-700">
           This payslip was computed with the earlier formula (Sundays and holidays not counted).
@@ -89,7 +87,9 @@ export function SalaryCalculation({ run }: { run: SalaryRun }) {
               ? `Monthly salary ÷ ${n(b.divisor)} calendar days`
               : `Monthly salary ÷ ${n(b.divisor)} working days`
           }
-          value={`${money(b.monthlyCtc)} ÷ ${n(b.divisor)} = ${money(b.perDay)}`}
+          value={`${money(b.monthlyCtc)} ÷ ${n(b.divisor)} ${
+            Number.isInteger(n(b.perDay)) ? '=' : '≈'
+          } ${money(b.perDay)}`}
           testid="calc-per-day"
         />
       </Step>
@@ -112,7 +112,7 @@ export function SalaryCalculation({ run }: { run: SalaryRun }) {
       <Step no={3} title="Earnings">
         <Row
           label="Base earned"
-          hint={`${money(b.perDay)} × ${n(b.paidUnits)} paid days`}
+          hint={`${money(b.monthlyCtc)} × ${n(b.paidUnits)} paid days ÷ ${n(b.divisor)}`}
           value={money(b.baseEarned)}
           testid="calc-base"
         />
@@ -201,7 +201,14 @@ function Row({
  * payslips computed afterwards — existing runs keep their stored figures
  * until Compute is clicked again.
  */
-export function SundayHolidaySwitch({ canManage }: { canManage: boolean }) {
+export function SundayHolidaySwitch({
+  canManage,
+  onChanged,
+}: {
+  canManage: boolean
+  /** Called after the switch is saved, so the open payslip can be recomputed. */
+  onChanged?: () => void
+}) {
   const { data: policy } = useSalaryPolicy()
   const update = useUpdateSalaryPolicy()
   const toast = useToast()
@@ -224,8 +231,15 @@ export function SundayHolidaySwitch({ canManage }: { canManage: boolean }) {
           update.mutate(
             { pay_sundays_holidays: e.target.checked },
             {
-              onSuccess: () =>
-                toast.success('Salary policy updated', 'Click Compute to apply it to a payslip.'),
+              onSuccess: () => {
+                toast.success(
+                  'Salary policy updated',
+                  onChanged
+                    ? 'This payslip is recalculated now; compute other payslips again to apply it.'
+                    : 'Click Compute to apply it to a payslip.',
+                )
+                onChanged?.()
+              },
               onError: (err) => toast.error('Could not update policy', (err as Error).message),
             },
           )

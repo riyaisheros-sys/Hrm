@@ -40,6 +40,10 @@ export interface PayrollInput {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+// Every amount of money is paid in whole rupees (client rule, 20 Nov): each
+// line is rounded to the nearest rupee, and totals are sums of rounded lines,
+// so the payslip always adds up exactly.
+const rupee = (n: number) => Math.round(n)
 const num = (n: unknown) => Number(n ?? 0) || 0
 const WORKED = new Set(['full_day', 'present', 'half_day', 'quarter_day'])
 
@@ -111,28 +115,28 @@ export function computePayroll(input: PayrollInput) {
   const compliant = new Set(input.compliantDates)
   const nonCompliant = [...workedDates].filter((d) => !compliant.has(d)).length
 
-  const baseEarned = round2(perDay * paidUnits)
+  const baseEarned = rupee(perDay * paidUnits)
   const overtimeRate = num(policy.overtime_rate_per_hour)
-  const overtimePay = round2((overtimeMinutes / 60) * overtimeRate)
+  const overtimePay = rupee((overtimeMinutes / 60) * overtimeRate)
   const latePenaltyPerDay = num(policy.late_penalty_per_day)
-  const latePenalty = round2(lateCount * latePenaltyPerDay)
+  const latePenalty = rupee(lateCount * latePenaltyPerDay)
   const planningPenaltyPerDay = num(policy.planning_penalty_per_day)
-  const planningPenalty = round2(nonCompliant * planningPenaltyPerDay)
-  const incentives = round2(sumKind(adjustments, 'incentive'))
-  const increments = round2(sumKind(adjustments, 'increment'))
-  const adjPenalty = round2(sumKind(adjustments, 'penalty'))
-  const penalties = round2(adjPenalty + latePenalty + planningPenalty)
-  const gross = round2(baseEarned + overtimePay + incentives + increments)
+  const planningPenalty = rupee(nonCompliant * planningPenaltyPerDay)
+  const incentives = rupee(sumKind(adjustments, 'incentive'))
+  const increments = rupee(sumKind(adjustments, 'increment'))
+  const adjPenalty = rupee(sumKind(adjustments, 'penalty'))
+  const penalties = rupee(adjPenalty + latePenalty + planningPenalty)
+  const gross = rupee(baseEarned + overtimePay + incentives + increments)
 
   const pfPercent = num(policy.pf_percent)
   const esicPercent = num(policy.esic_percent)
   const tdsPercent = num(policy.tds_percent)
-  const pf = round2((baseEarned * pfPercent) / 100)
-  const esic = round2((gross * esicPercent) / 100)
-  const professionalTax = round2(num(policy.professional_tax))
-  const tds = round2((gross * tdsPercent) / 100)
-  const statutory = round2(pf + esic + professionalTax + tds)
-  const net = round2(gross - penalties - statutory)
+  const pf = rupee((baseEarned * pfPercent) / 100)
+  const esic = rupee((gross * esicPercent) / 100)
+  const professionalTax = rupee(num(policy.professional_tax))
+  const tds = rupee((gross * tdsPercent) / 100)
+  const statutory = rupee(pf + esic + professionalTax + tds)
+  const net = rupee(gross - penalties - statutory)
 
   return {
     present,

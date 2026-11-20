@@ -40,10 +40,10 @@ describe('SalaryCalculation', () => {
         run={{ breakdown: calc.breakdown, base_earned: calc.baseEarned } as unknown as SalaryRun}
       />,
     )
-    expect(screen.getByTestId('calc-per-day').textContent).toContain('18,000.00 ÷ 30 = 600.00')
+    expect(screen.getByTestId('calc-per-day').textContent).toContain('18,000 ÷ 30 = 600')
     expect(screen.getByTestId('calc-paid-days').textContent).toBe('17')
-    expect(screen.getByTestId('calc-base').textContent).toBe('10,200.00')
-    expect(screen.getByTestId('calc-net').textContent).toBe('10,200.00')
+    expect(screen.getByTestId('calc-base').textContent).toBe('10,200')
+    expect(screen.getByTestId('calc-net').textContent).toBe('10,200')
   })
 
   it('tells the admin to recompute a payslip stored with the old formula', () => {

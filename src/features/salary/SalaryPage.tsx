@@ -1,4 +1,5 @@
 import { parseComponents, useMySalaryRuns, useSalaryProfile } from './hooks'
+import { rupees } from './money'
 import { useAuth } from '@/features/auth/auth-context'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardBody } from '@/components/ui/Card'
@@ -29,16 +30,16 @@ export function SalaryPage() {
                     <Badge tone={c.kind === 'deduction' ? 'red' : 'green'}>{c.kind}</Badge>
                     {c.label}
                   </span>
-                  <span className="font-medium text-slate-900">{c.amount}</span>
+                  <span className="font-medium text-slate-900">{rupees(c.amount)}</span>
                 </li>
               ))}
             </ul>
             <div className="mt-3 flex justify-end gap-6 border-t border-slate-200 pt-2 text-sm">
               <span className="text-slate-500">
-                Gross <span className="font-semibold text-slate-800">{gross}</span>
+                Gross <span className="font-semibold text-slate-800">{rupees(gross)}</span>
               </span>
               <span className="text-slate-500">
-                Net <span className="font-semibold text-emerald-700">{gross - deductions}</span>
+                Net <span className="font-semibold text-emerald-700">{rupees(gross - deductions)}</span>
               </span>
             </div>
           </CardBody>
@@ -62,8 +63,8 @@ export function SalaryPage() {
               <tr key={r.id} data-testid="salary-run-row">
                 <Td className="font-medium text-slate-900">{r.period_month.slice(0, 7)}</Td>
                 <Td>{r.present_days}</Td>
-                <Td>{r.gross}</Td>
-                <Td className="font-semibold text-emerald-700">{r.net}</Td>
+                <Td>{rupees(r.gross)}</Td>
+                <Td className="font-semibold text-emerald-700">{rupees(r.net)}</Td>
               </tr>
             ))}
           </Tbody>

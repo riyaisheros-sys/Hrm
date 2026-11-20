@@ -167,6 +167,24 @@ export function useAddAdjustment() {
   })
 }
 
+/** The stored payslip for one employee and month (null until computed). */
+export function useSalaryRun(userId: string | null, month: string) {
+  return useQuery({
+    queryKey: ['salary-runs', 'one', userId, month],
+    enabled: !!userId && !!month,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('salary_runs')
+        .select('*')
+        .eq('user_id', userId!)
+        .eq('period_month', `${month}-01`)
+        .maybeSingle()
+      if (error) throw error
+      return data
+    },
+  })
+}
+
 export function useComputeSalary() {
   const qc = useQueryClient()
   return useMutation({
@@ -175,7 +193,10 @@ export function useComputeSalary() {
       if (error) throw error
       return (data as { run: SalaryRun }).run
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['salary-runs'] }),
+    onSuccess: (run, args) => {
+      qc.setQueryData(['salary-runs', 'one', args.userId, args.month], run)
+      qc.invalidateQueries({ queryKey: ['salary-runs'] })
+    },
   })
 }
 

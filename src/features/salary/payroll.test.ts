@@ -75,7 +75,7 @@ describe('computePayroll', () => {
     )
     expect(r.breakdown.dayBasis).toBe('working_days')
     expect(r.breakdown.sundays).toBe(0)
-    expect(r.baseEarned).toBe(9692.31) // 18000 / 26 * 14
+    expect(r.baseEarned).toBe(9692) // 18000 / 26 * 14 = 9692.31, paid in whole rupees
   })
 
   it('pays an unworked weekday holiday once; ignores a holiday on a Sunday', () => {
@@ -139,5 +139,32 @@ describe('computePayroll', () => {
     expect(r.penalties).toBe(150) // 1 late × 50 + 1 planning gap × 100
     expect(r.pf).toBe(330)
     expect(r.net).toBe(2770)
+  })
+
+  it('pays every amount in whole rupees and the payslip still adds up', () => {
+    // 31-day month: 20,000 ÷ 31 = 645.16 a day, which never lands on a rupee.
+    const worked = ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-05', '2026-10-06']
+    const r = computePayroll({
+      month: '2026-10',
+      today: '2026-10-07',
+      monthlyCtc: 20000,
+      policy: { ...policy, pf_percent: 12, tds_percent: 1.5, overtime_rate_per_hour: 95 },
+      days: worked.map((work_date) => ({
+        work_date,
+        status: 'full_day',
+        is_late: false,
+        overtime_minutes: 7,
+      })),
+      paidLeaveDays: 0,
+      holidays: [],
+      compliantDates: worked,
+      adjustments: [{ kind: 'incentive', amount: 250.75 }],
+    })
+    for (const amount of [r.baseEarned, r.overtimePay, r.incentives, r.pf, r.tds, r.gross, r.net]) {
+      expect(Number.isInteger(amount)).toBe(true)
+    }
+    expect(r.baseEarned).toBe(3871) // 20000 × 6 paid days (5 worked + 1 Sunday) ÷ 31 = 3870.97
+    expect(r.gross).toBe(r.baseEarned + r.overtimePay + r.incentives + r.increments)
+    expect(r.net).toBe(r.gross - r.penalties - r.pf - r.esic - r.professionalTax - r.tds)
   })
 })
