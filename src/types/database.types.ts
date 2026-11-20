@@ -352,6 +352,10 @@ export type Database = {
           work_start: string
           break_minutes: number
           location_accuracy_cap_m: number
+          count_within_work_hours: boolean
+          exclude_lunch: boolean
+          lunch_start: string | null
+          lunch_end: string | null
         }
         Insert: {
           full_day_hours?: number
@@ -370,6 +374,10 @@ export type Database = {
           work_start?: string
           break_minutes?: number
           location_accuracy_cap_m?: number
+          count_within_work_hours?: boolean
+          exclude_lunch?: boolean
+          lunch_start?: string | null
+          lunch_end?: string | null
         }
         Update: {
           full_day_hours?: number
@@ -388,6 +396,10 @@ export type Database = {
           work_start?: string
           break_minutes?: number
           location_accuracy_cap_m?: number
+          count_within_work_hours?: boolean
+          exclude_lunch?: boolean
+          lunch_start?: string | null
+          lunch_end?: string | null
         }
         Relationships: []
       }

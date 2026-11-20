@@ -41,6 +41,7 @@ import { MyTrainingPage } from '@/features/training/MyTrainingPage'
 import { MastersPage } from '@/features/admin/masters/MastersPage'
 import { EmployeePanelPage } from '@/features/admin/employee-panel/EmployeePanelPage'
 import { KraKpiMasterPage } from '@/features/performance/KraKpiMasterPage'
+import { AttendanceSettingsPage } from '@/features/attendance/AttendanceSettingsPage'
 
 export function App() {
   return (
@@ -238,6 +239,14 @@ export function App() {
           element={
             <RequirePermission perm="users.manage">
               <MastersPage />
+            </RequirePermission>
+          }
+        />
+        <Route
+          path="/admin/attendance-settings"
+          element={
+            <RequirePermission perm={['attendance.view_all', 'attendance.edit']}>
+              <AttendanceSettingsPage />
             </RequirePermission>
           }
         />

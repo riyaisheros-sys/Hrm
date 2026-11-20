@@ -71,7 +71,7 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   // Attendance
   { kind: 'linked', module: 'Attendance', label: 'Attendance Monitor', href: '/admin/attendance' },
   { kind: 'linked', module: 'Attendance', label: 'Locations (geo-fence)', href: '/admin/attendance', note: 'Attendance Monitor → Locations' },
-  { kind: 'linked', module: 'Attendance', label: 'Working-hours config', href: '/admin/attendance', note: 'Attendance Monitor → Settings' },
+  { kind: 'linked', module: 'Attendance', label: 'Attendance Settings', href: '/admin/attendance-settings', note: 'Working hours, lunch, day thresholds, grace, geo-fence' },
   { kind: 'linked', module: 'Attendance', label: 'Monitoring', href: '/admin/monitoring' },
 
   // Planning

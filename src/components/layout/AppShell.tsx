@@ -64,6 +64,13 @@ const adminNav: NavItem[] = [
     testid: 'nav-attendance',
     perm: 'attendance.view_all',
   },
+  {
+    to: '/admin/attendance-settings',
+    label: 'Attendance Settings',
+    icon: Settings2,
+    testid: 'nav-attendance-settings',
+    perm: 'attendance.view_all',
+  },
   { to: '/tasks', label: 'Tasks', icon: ListChecks, testid: 'nav-tasks', perm: 'tasks.view_all' },
   {
     to: '/admin/planning',

@@ -28,6 +28,7 @@ export const SIDEBAR_GROUP_FOR: Record<string, Record<string, string>> = {
     'nav-dashboard':         'home',
     // Entries — admin creates/edits data here
     'nav-attendance':        'entries',
+    'nav-attendance-settings': 'entries',
     'nav-planning-admin':    'entries',
     'nav-tasks':             'entries',
     'nav-users':             'entries',
