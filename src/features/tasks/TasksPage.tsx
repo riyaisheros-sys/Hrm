@@ -289,6 +289,15 @@ export function TasksPage() {
               </>
             )}
           </div>
+          {t.description && !isChild && (
+            <p
+              data-testid="task-description"
+              className="mt-1 line-clamp-2 text-xs font-normal whitespace-pre-line text-slate-600"
+              title={t.description}
+            >
+              {t.description}
+            </p>
+          )}
           {t.remarks && !isChild && (
             <div
               data-testid="task-remark"
@@ -818,6 +827,7 @@ function NewTaskModal({
   )
   const [dueDate, setDueDate] = useState('')
   const [remarks, setRemarks] = useState('')
+  const [description, setDescription] = useState('')
   const [categoryId, setCategoryId] = useState('')
 
   const sortedUsers = useMemo(
@@ -872,6 +882,7 @@ function NewTaskModal({
                   dueDate: dueDate || null,
                   createdBy: userId,
                   remarks,
+                  description: description.trim() || undefined,
                   categoryId: categoryId || null,
                   bulkKey,
                 }),
@@ -895,6 +906,17 @@ function NewTaskModal({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
+          />
+        </div>
+        <div>
+          <Label htmlFor="task-description">Description</Label>
+          <Textarea
+            id="task-description"
+            data-testid="task-description-input"
+            rows={3}
+            placeholder="What needs to be done, steps, expected output…"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -1082,6 +1104,7 @@ function EditTaskModal({
   const [dueDate, setDueDate] = useState(task.due_date ?? '')
   const [categoryId, setCategoryId] = useState(task.category_id ?? '')
   const [remarks, setRemarks] = useState(task.remarks ?? '')
+  const [description, setDescription] = useState(task.description ?? '')
 
   return (
     <Modal open onClose={onClose} title={`Edit: ${task.title}`} testid="edit-task-modal">
@@ -1104,6 +1127,7 @@ function EditTaskModal({
                 assigneeId: assigneeId || task.created_by,
                 categoryId: categoryId || null,
                 remarks,
+                description,
               },
             },
             {
@@ -1124,6 +1148,17 @@ function EditTaskModal({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
+          />
+        </div>
+        <div>
+          <Label htmlFor="edit-task-description">Description</Label>
+          <Textarea
+            id="edit-task-description"
+            data-testid="edit-task-description-input"
+            rows={3}
+            placeholder="What needs to be done, steps, expected output…"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
           />
         </div>
         <div className="grid grid-cols-2 gap-3">

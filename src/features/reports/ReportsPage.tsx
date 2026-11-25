@@ -739,12 +739,7 @@ export function ReportsPage() {
                         {meta ? (
                           <Badge className={meta.className}>{value}</Badge>
                         ) : isLong && value && value !== '—' ? (
-                          <div
-                            title={value}
-                            className="max-h-24 max-w-sm overflow-auto whitespace-pre-wrap text-xs leading-snug text-slate-700"
-                          >
-                            {value}
-                          </div>
+                          <LongText text={value} testid={`report-long-${c.key}`} />
                         ) : (
                           value
                         )}
@@ -890,5 +885,35 @@ function DetailModal({ detail, onClose }: { detail: DetailView; onClose: () => v
         </div>
       )}
     </Modal>
+  )
+}
+
+/**
+ * Multi-line text in a report cell (description, remarks, reasons): keeps the
+ * writer's line breaks, shows four lines, and expands in place.
+ */
+function LongText({ text, testid }: { text: string; testid?: string }) {
+  const [open, setOpen] = useState(false)
+  const long = text.length > 180 || text.split('\n').length > 4
+  return (
+    <div className="max-w-md min-w-56" data-testid={testid}>
+      <p
+        className={cn(
+          'text-[13px] leading-relaxed break-words whitespace-pre-line text-slate-700',
+          !open && long && 'line-clamp-4',
+        )}
+      >
+        {text.trim()}
+      </p>
+      {long && (
+        <button
+          type="button"
+          className="text-brand-600 mt-0.5 text-xs font-medium hover:underline"
+          onClick={() => setOpen((v) => !v)}
+        >
+          {open ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
   )
 }

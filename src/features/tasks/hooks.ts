@@ -223,6 +223,7 @@ export function useUpdateTaskProgress() {
  * manager. `assigneeId` null detaches the task back to the creator's self.
  */
 export interface TaskEdit {
+  description?: string | null
   title?: string
   priority?: 'low' | 'medium' | 'high'
   dueDate?: string | null
@@ -242,6 +243,7 @@ export function useUpdateTask() {
       if (p.dueDate !== undefined) patch.due_date = p.dueDate
       if (p.categoryId !== undefined) patch.category_id = p.categoryId
       if (p.remarks !== undefined) patch.remarks = p.remarks?.trim() || null
+      if (p.description !== undefined) patch.description = p.description?.trim() || null
       if (p.assigneeId !== undefined) {
         patch.assignee_id = p.assigneeId
         // Keep task_type consistent: self when owner==assignee, assigned otherwise.
