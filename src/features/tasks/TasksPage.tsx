@@ -34,7 +34,7 @@ import {
   type TaskRow,
 } from './hooks'
 import { availableActions, styleForStatus } from './status-ui'
-import { useUsers } from '@/features/admin/users/hooks'
+import { useActivePeople } from '@/lib/people'
 import { useAuth } from '@/features/auth/auth-context'
 import { useProfile } from '@/features/rbac/profile-context'
 import { useToast } from '@/components/ui/toast-context'
@@ -661,7 +661,8 @@ function NewTaskModal({
   const create = useCreateTask()
   const toast = useToast()
   const { data: statuses = [] } = useTaskStatuses()
-  const { data: users = [] } = useUsers()
+  // Colleague directory: employees with tasks.assign can pick anyone active.
+  const { data: users = [] } = useActivePeople()
   const { data: categories = [] } = useTaskCategories()
   const [title, setTitle] = useState('')
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium')
@@ -927,7 +928,7 @@ function EditTaskModal({
 }) {
   const update = useUpdateTask()
   const toast = useToast()
-  const { data: users = [] } = useUsers()
+  const { data: users = [] } = useActivePeople()
   const { data: categories = [] } = useTaskCategories()
   const [title, setTitle] = useState(task.title)
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>(

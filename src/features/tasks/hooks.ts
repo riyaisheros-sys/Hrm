@@ -70,9 +70,34 @@ export function useTasks() {
         .select(TASK_SELECT)
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data ?? []) as unknown as TaskRow[]
+      return fillPeople((data ?? []) as unknown as TaskRow[])
     },
   })
+}
+
+/**
+ * Employees may not read other people's profiles, so the embedded assigner /
+ * assignee comes back empty on tasks they share with a colleague. Fill those
+ * names from the colleague directory (only when something is missing).
+ */
+async function fillPeople(rows: TaskRow[]): Promise<TaskRow[]> {
+  const missing = rows.some(
+    (t) => (!t.creator && t.created_by) || (!t.assignee && t.assignee_id),
+  )
+  if (!missing) return rows
+  const { data, error } = await supabase.rpc('people_directory' as never)
+  if (error || !data) return rows
+  const byId = new Map(
+    (data as unknown as Array<{ id: string; full_name: string; email: string }>).map((p) => [
+      p.id,
+      { id: p.id, full_name: p.full_name, email: p.email },
+    ]),
+  )
+  return rows.map((t) => ({
+    ...t,
+    creator: t.creator ?? (t.created_by ? (byId.get(t.created_by) ?? null) : null),
+    assignee: t.assignee ?? (t.assignee_id ? (byId.get(t.assignee_id) ?? null) : null),
+  }))
 }
 
 export interface NewTask {

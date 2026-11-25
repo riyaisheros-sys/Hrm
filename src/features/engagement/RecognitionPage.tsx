@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Award, Plus } from 'lucide-react'
 import { useAwardRecognition, useRecognitions } from './hooks'
-import { useUsers } from '@/features/admin/users/hooks'
+import { usePeople } from '@/lib/people'
 import { useProfile } from '@/features/rbac/profile-context'
 import { useToast } from '@/components/ui/toast-context'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -20,7 +20,7 @@ export function RecognitionPage() {
   const { hasPermission } = useProfile()
   const canManage = hasPermission('recognition.manage')
   const { data: items = [] } = useRecognitions()
-  const { data: users = [] } = useUsers()
+  const { data: users = [] } = usePeople()
   const nameById = new Map(users.map((u) => [u.id, u.full_name || u.email]))
   const [open, setOpen] = useState(false)
 

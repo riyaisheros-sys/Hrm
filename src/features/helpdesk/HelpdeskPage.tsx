@@ -8,7 +8,7 @@ import {
   useUpdateTicket,
   type Ticket,
 } from './hooks'
-import { useUsers } from '@/features/admin/users/hooks'
+import { usePeople } from '@/lib/people'
 import { useProfile } from '@/features/rbac/profile-context'
 import { useToast } from '@/components/ui/toast-context'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -51,7 +51,7 @@ export function HelpdeskPage() {
     status: (t) => t.status,
   })
   const ticketsPage = usePagination(controls.rows, 25, controls.stateKey)
-  const { data: users = [] } = useUsers()
+  const { data: users = [] } = usePeople()
   const { data: categories = [] } = useMasterItems('helpdesk_categories')
   const raise = useRaiseTicket()
   const update = useUpdateTicket()
