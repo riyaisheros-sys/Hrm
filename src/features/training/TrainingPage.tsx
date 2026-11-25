@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ExternalLink, Paperclip, Plus, Trash2, UserPlus } from 'lucide-react'
+import { ExternalLink, Paperclip, Pencil, Plus, Trash2, UserPlus } from 'lucide-react'
 import {
   getTrainingAttachmentUrl,
   useAssignTraining,
@@ -8,6 +8,8 @@ import {
   useModuleAssignments,
   useTrainingAttachments,
   useTrainingModules,
+  type TrainingModule,
+  useUpdateModule,
   useUpdateTrainingResult,
   useUploadTrainingAttachment,
 } from './hooks'
@@ -18,6 +20,7 @@ import { Card, CardBody } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Textarea } from '@/components/ui/Textarea'
@@ -33,7 +36,8 @@ export function TrainingPage() {
   const { data: modules = [] } = useTrainingModules()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const selected = modules.find((m) => m.id === selectedId) ?? modules[0] ?? null
-  const [moduleModal, setModuleModal] = useState(false)
+  const [moduleModal, setModuleModal] = useState<TrainingModule | 'new' | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [assignModal, setAssignModal] = useState(false)
   const deleteModule = useDeleteModule()
   const toast = useToast()
@@ -44,7 +48,7 @@ export function TrainingPage() {
         title="Training"
         description="Create training modules, assign them to users, and track completion & acknowledgement."
         actions={
-          <Button data-testid="new-module-button" onClick={() => setModuleModal(true)}>
+          <Button data-testid="new-module-button" onClick={() => setModuleModal('new')}>
             <Plus className="size-4" /> New module
           </Button>
         }
@@ -94,18 +98,20 @@ export function TrainingPage() {
                     <UserPlus className="size-4" /> Assign
                   </Button>
                   <button
+                    type="button"
+                    data-testid="edit-module"
+                    aria-label={`Edit module ${selected.title}`}
+                    className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+                    onClick={() => setModuleModal(selected)}
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button
+                    type="button"
                     data-testid="delete-module"
                     aria-label={`Delete module ${selected.title}`}
-                    className="text-slate-300 hover:text-red-600"
-                    onClick={() =>
-                      deleteModule.mutate(selected.id, {
-                        onSuccess: () => {
-                          toast.success('Module deleted')
-                          setSelectedId(null)
-                        },
-                        onError: (err) => toast.error('Delete failed', (err as Error).message),
-                      })
-                    }
+                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    onClick={() => setConfirmDelete(true)}
                   >
                     <Trash2 className="size-4" />
                   </button>
@@ -123,7 +129,37 @@ export function TrainingPage() {
         )}
       </div>
 
-      {moduleModal && <ModuleModal onClose={() => setModuleModal(false)} />}
+      {moduleModal && (
+        <ModuleModal
+          existing={moduleModal === 'new' ? null : moduleModal}
+          onClose={() => setModuleModal(null)}
+        />
+      )}
+      {confirmDelete && selected && (
+        <ConfirmDialog
+          title="Delete training module"
+          testid="delete-module-dialog"
+          confirmLabel="Delete module"
+          loading={deleteModule.isPending}
+          onClose={() => setConfirmDelete(false)}
+          message={
+            <p>
+              Delete <span className="font-semibold text-slate-900">{selected.title}</span> with its
+              attachments and assignments? This cannot be undone.
+            </p>
+          }
+          onConfirm={() =>
+            deleteModule.mutate(selected.id, {
+              onSuccess: () => {
+                toast.success('Module deleted')
+                setSelectedId(null)
+                setConfirmDelete(false)
+              },
+              onError: (err) => toast.error('Delete failed', (err as Error).message),
+            })
+          }
+        />
+      )}
       {assignModal && selected && (
         <AssignModal moduleId={selected.id} onClose={() => setAssignModal(false)} />
       )}
@@ -282,28 +318,39 @@ function AssignmentResult({ assignment }: { assignment: import('./hooks').Assign
   )
 }
 
-function ModuleModal({ onClose }: { onClose: () => void }) {
+function ModuleModal({
+  existing,
+  onClose,
+}: {
+  existing: TrainingModule | null
+  onClose: () => void
+}) {
   const create = useCreateModule()
+  const update = useUpdateModule()
   const toast = useToast()
-  const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
+  const [title, setTitle] = useState(existing?.title ?? '')
+  const [body, setBody] = useState(existing?.body ?? '')
 
   return (
-    <Modal open onClose={onClose} title="New training module" testid="module-modal">
+    <Modal
+      open
+      onClose={onClose}
+      title={existing ? 'Edit training module' : 'New training module'}
+      testid="module-modal"
+    >
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault()
-          create.mutate(
-            { title: title.trim(), body },
-            {
-              onSuccess: () => {
-                toast.success('Module created')
-                onClose()
-              },
-              onError: (err) => toast.error('Failed', (err as Error).message),
+          const done = {
+            onSuccess: () => {
+              toast.success(existing ? 'Module updated' : 'Module created')
+              onClose()
             },
-          )
+            onError: (err: unknown) => toast.error('Failed', (err as Error).message),
+          }
+          if (existing) update.mutate({ id: existing.id, title: title.trim(), body }, done)
+          else create.mutate({ title: title.trim(), body }, done)
         }}
       >
         <div>
@@ -332,8 +379,12 @@ function ModuleModal({ onClose }: { onClose: () => void }) {
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" data-testid="create-module-submit" loading={create.isPending}>
-            Create
+          <Button
+            type="submit"
+            data-testid={existing ? 'save-module-submit' : 'create-module-submit'}
+            loading={create.isPending || update.isPending}
+          >
+            {existing ? 'Save' : 'Create'}
           </Button>
         </div>
       </form>

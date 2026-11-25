@@ -47,14 +47,41 @@ export function useCreateModule() {
   })
 }
 
+export function useUpdateModule() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; title: string; body: string }) => {
+      const { data, error } = await supabase
+        .from('training_modules')
+        .update({ title: input.title, body: input.body })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this training module')
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['training-modules'] })
+      qc.invalidateQueries({ queryKey: ['my-trainings'] })
+    },
+  })
+}
+
 export function useDeleteModule() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (moduleId: string) => {
-      const { error } = await supabase.from('training_modules').delete().eq('id', moduleId)
+      const { data, error } = await supabase
+        .from('training_modules')
+        .delete()
+        .eq('id', moduleId)
+        .select('id')
       if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this training module')
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['training-modules'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['training-modules'] })
+      qc.invalidateQueries({ queryKey: ['my-trainings'] })
+    },
   })
 }
 

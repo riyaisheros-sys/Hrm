@@ -9,8 +9,10 @@ import {
   useDeleteStep,
   useMoveStep,
   useSteps,
+  useUpdateDefinition,
   useUpdateStep,
   WORKFLOW_ENTITY_TYPES,
+  type WorkflowDefinitionRow,
   type WorkflowStep,
 } from './hooks'
 import { useUsers } from '@/features/admin/users/hooks'
@@ -19,6 +21,7 @@ import { useToast } from '@/components/ui/toast-context'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardBody } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
+import { Checkbox } from '@/components/ui/Checkbox'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
@@ -64,7 +67,7 @@ function WorkflowsView({ scope }: { scope: 'admin' | 'my' }) {
   const deleteStep = useDeleteStep()
   const deleteDefinition = useDeleteDefinition()
   const toast = useToast()
-  const [defModal, setDefModal] = useState(false)
+  const [defModal, setDefModal] = useState<WorkflowDefinitionRow | 'new' | null>(null)
   const [stepName, setStepName] = useState('')
   const [editingStep, setEditingStep] = useState<WorkflowStep | null>(null)
   const [confirmDeleteStep, setConfirmDeleteStep] = useState<WorkflowStep | null>(null)
@@ -90,7 +93,7 @@ function WorkflowsView({ scope }: { scope: 'admin' | 'my' }) {
             : 'Your personal rulebook — document each of your processes as an ordered plan of steps. These are reference plans, not automations.'
         }
         actions={
-          <Button data-testid="new-definition-button" onClick={() => setDefModal(true)}>
+          <Button data-testid="new-definition-button" onClick={() => setDefModal('new')}>
             <Plus className="size-4" /> New workflow
           </Button>
         }
@@ -139,7 +142,14 @@ function WorkflowsView({ scope }: { scope: 'admin' | 'my' }) {
                   selected?.id === d.id ? 'bg-brand-50 text-brand-800' : 'hover:bg-slate-100',
                 )}
               >
-                <span className="font-medium">{d.name}</span>
+                <span className="flex items-center gap-1.5 font-medium">
+                  {d.name}
+                  {!d.is_active && (
+                    <Badge tone="slate" data-testid="definition-inactive">
+                      Inactive
+                    </Badge>
+                  )}
+                </span>
                 <span className="text-xs text-slate-400">
                   {entityTypes.labelOf(d.entity_type)}
                   {scope === 'admin' && (
@@ -158,15 +168,34 @@ function WorkflowsView({ scope }: { scope: 'admin' | 'my' }) {
           <Card>
             <CardBody className="space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-slate-900">{selected.name}</h2>
-                <button
-                  data-testid="delete-definition"
-                  aria-label={`Delete workflow ${selected.name}`}
-                  className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
-                  onClick={() => setConfirmDeleteDef(true)}
-                >
-                  <Trash2 className="size-4" />
-                </button>
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-slate-900">{selected.name}</h2>
+                  {selected.description && (
+                    <p className="text-sm text-slate-500" data-testid="definition-description-text">
+                      {selected.description}
+                    </p>
+                  )}
+                </div>
+                <span className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    data-testid="edit-definition"
+                    aria-label={`Edit workflow ${selected.name}`}
+                    className="hover:text-brand-600 rounded p-1 text-slate-400 hover:bg-slate-100"
+                    onClick={() => setDefModal(selected)}
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="delete-definition"
+                    aria-label={`Delete workflow ${selected.name}`}
+                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    onClick={() => setConfirmDeleteDef(true)}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </span>
               </div>
 
               <ol className="space-y-2" data-testid="steps-list">
@@ -257,7 +286,14 @@ function WorkflowsView({ scope }: { scope: 'admin' | 'my' }) {
         )}
       </div>
 
-      {defModal && user && <DefinitionModal ownerId={user.id} onClose={() => setDefModal(false)} />}
+      {defModal && user && (
+        <DefinitionModal
+          ownerId={user.id}
+          existing={defModal === 'new' ? null : defModal}
+          owners={scope === 'admin' ? users : null}
+          onClose={() => setDefModal(null)}
+        />
+      )}
       {editingStep && <EditStepModal step={editingStep} onClose={() => setEditingStep(null)} />}
       {confirmDeleteStep && (
         <ConfirmDialog
@@ -369,30 +405,61 @@ function EditStepModal({ step, onClose }: { step: WorkflowStep; onClose: () => v
   )
 }
 
-function DefinitionModal({ ownerId, onClose }: { ownerId: string; onClose: () => void }) {
+function DefinitionModal({
+  ownerId,
+  existing,
+  owners,
+  onClose,
+}: {
+  ownerId: string
+  existing: WorkflowDefinitionRow | null
+  /** Owner picker choices (admin view, edit only); null hides the picker. */
+  owners: { id: string; full_name: string | null; email: string }[] | null
+  onClose: () => void
+}) {
   const create = useCreateDefinition()
+  const update = useUpdateDefinition()
   const toast = useToast()
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
+  const [name, setName] = useState(existing?.name ?? '')
+  const [description, setDescription] = useState(existing?.description ?? '')
   const entityTypes = useEntityTypes()
-  const [entityType, setEntityType] = useState(entityTypes.options[0]?.code ?? 'generic')
+  const [entityType, setEntityType] = useState(
+    existing?.entity_type ?? entityTypes.options[0]?.code ?? 'generic',
+  )
+  const [owner, setOwner] = useState(existing?.owner_id ?? '')
+  const [isActive, setIsActive] = useState(existing?.is_active ?? true)
 
   return (
-    <Modal open onClose={onClose} title="New workflow" testid="definition-modal">
+    <Modal
+      open
+      onClose={onClose}
+      title={existing ? 'Edit workflow' : 'New workflow'}
+      testid="definition-modal"
+    >
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault()
-          create.mutate(
-            { name: name.trim(), description, entityType, ownerId },
-            {
-              onSuccess: () => {
-                toast.success('Workflow created')
-                onClose()
-              },
-              onError: (err) => toast.error('Failed', (err as Error).message),
+          const done = {
+            onSuccess: () => {
+              toast.success(existing ? 'Workflow updated' : 'Workflow created')
+              onClose()
             },
-          )
+            onError: (err: unknown) => toast.error('Failed', (err as Error).message),
+          }
+          if (existing)
+            update.mutate(
+              {
+                id: existing.id,
+                name: name.trim(),
+                description,
+                entityType,
+                ownerId: owners ? owner || null : existing.owner_id,
+                isActive,
+              },
+              done,
+            )
+          else create.mutate({ name: name.trim(), description, entityType, ownerId }, done)
         }}
       >
         <div>
@@ -402,7 +469,8 @@ function DefinitionModal({ ownerId, onClose }: { ownerId: string; onClose: () =>
             data-testid="definition-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            required
+            // Older workflows predate the description field; don't block their edits.
+            required={!existing}
           />
         </div>
         <div>
@@ -428,14 +496,49 @@ function DefinitionModal({ ownerId, onClose }: { ownerId: string; onClose: () =>
                 {t.name}
               </option>
             ))}
+            {existing && !entityTypes.options.some((t) => t.code === existing.entity_type) && (
+              <option value={existing.entity_type}>{entityTypes.labelOf(existing.entity_type)}</option>
+            )}
           </Select>
         </div>
+        {existing && owners && (
+          <div>
+            <Label htmlFor="def-owner">Owner</Label>
+            <Select
+              id="def-owner"
+              data-testid="definition-owner-select"
+              value={owner}
+              onChange={(e) => setOwner(e.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {owners.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.full_name || u.email}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+        {existing && (
+          <Checkbox
+            id="def-active"
+            data-testid="definition-active"
+            label="Active"
+            description="Inactive workflows stay listed but are marked as no longer in use."
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+          />
+        )}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" data-testid="create-definition-submit" loading={create.isPending}>
-            Create
+          <Button
+            type="submit"
+            data-testid={existing ? 'save-definition-submit' : 'create-definition-submit'}
+            loading={create.isPending || update.isPending}
+          >
+            {existing ? 'Save' : 'Create'}
           </Button>
         </div>
       </form>

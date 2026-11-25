@@ -1,6 +1,6 @@
 import { FALLBACK_ASSET_TYPES, useMasterOptions } from '@/lib/masterOptions'
 import { useMemo, useState } from 'react'
-import { Plus, Search, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import {
   useActiveAssignments,
   useAssetAssignments,
@@ -10,6 +10,7 @@ import {
   useDeleteAsset,
   useReturnAsset,
   useTransferAsset,
+  useUpdateAsset,
   type Asset,
 } from './hooks'
 import { useUsers } from '@/features/admin/users/hooks'
@@ -18,6 +19,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
@@ -28,6 +30,17 @@ import { SortFilterTh } from '@/components/ui/SortFilterTh'
 import { useTableControls } from '@/lib/useTableControls'
 import { EmptyState } from '@/components/ui/EmptyState'
 
+// Asset condition is a free-text column (default 'good'); these are the presets offered.
+const ASSET_CONDITIONS = [
+  { code: 'good', name: 'Good' },
+  { code: 'fair', name: 'Fair' },
+  { code: 'poor', name: 'Poor' },
+  { code: 'damaged', name: 'Damaged' },
+  { code: 'under_repair', name: 'Under repair' },
+  { code: 'lost', name: 'Lost' },
+]
+const conditionLabel = (code: string) =>
+  ASSET_CONDITIONS.find((c) => c.code === code)?.name ?? code.replace(/_/g, ' ')
 
 export function AssetsPage() {
   const assetTypes = useMasterOptions('asset_types', FALLBACK_ASSET_TYPES)
@@ -35,6 +48,10 @@ export function AssetsPage() {
   const { data: holders } = useActiveAssignments()
   const [createOpen, setCreateOpen] = useState(false)
   const [manage, setManage] = useState<Asset | null>(null)
+  const [editing, setEditing] = useState<Asset | null>(null)
+  const [deleting, setDeleting] = useState<Asset | null>(null)
+  const del = useDeleteAsset()
+  const toast = useToast()
   const [search, setSearch] = useState('')
 
   const visible = useMemo(() => {
@@ -108,13 +125,31 @@ export function AssetsPage() {
                 </Td>
                 <Td className="text-slate-600" data-testid="asset-holder-cell">{holders?.get(a.id) ?? '—'}</Td>
                 <Td>
-                  <div className="flex justify-end">
+                  <div className="flex items-center justify-end gap-1">
                     <button
                       data-testid="manage-asset"
                       className="rounded px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
                       onClick={() => setManage(a)}
                     >
                       Manage
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="edit-asset-row"
+                      aria-label={`Edit asset ${a.name}`}
+                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+                      onClick={() => setEditing(a)}
+                    >
+                      <Pencil className="size-4" />
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="delete-asset-row"
+                      aria-label={`Delete asset ${a.name}`}
+                      className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                      onClick={() => setDeleting(a)}
+                    >
+                      <Trash2 className="size-4" />
                     </button>
                   </div>
                 </Td>
@@ -125,37 +160,98 @@ export function AssetsPage() {
       )}
       <Pagination {...assetsPage} testid="assets-pagination" />
 
-      {createOpen && <CreateAssetModal onClose={() => setCreateOpen(false)} />}
-      {manage && <AssetModal asset={manage} onClose={() => setManage(null)} />}
+      {createOpen && <AssetFormModal existing={null} onClose={() => setCreateOpen(false)} />}
+      {editing && <AssetFormModal existing={editing} onClose={() => setEditing(null)} />}
+      {manage && (
+        <AssetModal
+          asset={manage}
+          onClose={() => setManage(null)}
+          onEdit={() => {
+            setEditing(manage)
+            setManage(null)
+          }}
+        />
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title="Delete asset"
+          testid="asset-delete-dialog"
+          confirmLabel="Delete asset"
+          loading={del.isPending}
+          onClose={() => setDeleting(null)}
+          message={
+            <p>
+              Delete <span className="font-semibold text-slate-900">{deleting.name}</span> and its
+              assignment history? This cannot be undone.
+            </p>
+          }
+          onConfirm={() =>
+            del.mutate(deleting.id, {
+              onSuccess: () => {
+                toast.success('Asset deleted')
+                setDeleting(null)
+              },
+              onError: (err) => toast.error('Delete failed', (err as Error).message),
+            })
+          }
+        />
+      )}
     </div>
   )
 }
 
-function CreateAssetModal({ onClose }: { onClose: () => void }) {
+function AssetFormModal({ existing, onClose }: { existing: Asset | null; onClose: () => void }) {
   const create = useCreateAsset()
+  const update = useUpdateAsset()
   const toast = useToast()
   const assetTypes = useMasterOptions('asset_types', FALLBACK_ASSET_TYPES)
-  const [assetType, setAssetType] = useState(assetTypes.options[0]?.code ?? 'laptop')
-  const [name, setName] = useState('')
-  const [serial, setSerial] = useState('')
-  const [batchNo, setBatchNo] = useState('')
+  const [assetType, setAssetType] = useState(existing?.asset_type ?? assetTypes.options[0]?.code ?? 'laptop')
+  const [name, setName] = useState(existing?.name ?? '')
+  const [serial, setSerial] = useState(existing?.serial ?? '')
+  const [batchNo, setBatchNo] = useState(existing?.batch_no ?? '')
+  const [condition, setCondition] = useState(existing?.condition ?? 'good')
+  const pending = create.isPending || update.isPending
   return (
-    <Modal open onClose={onClose} title="New asset" testid="asset-modal-create">
+    <Modal
+      open
+      onClose={onClose}
+      title={existing ? 'Edit asset' : 'New asset'}
+      testid={existing ? 'asset-modal-edit' : 'asset-modal-create'}
+    >
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault()
-          create.mutate(
-            { assetType, name: name.trim(), serial: serial.trim() || undefined, batchNo: batchNo.trim() || undefined },
-            { onSuccess: () => { toast.success('Asset created'); onClose() }, onError: (err) => toast.error('Failed', (err as Error).message) },
-          )
+          const input = { assetType, name: name.trim(), serial: serial.trim() || undefined, batchNo: batchNo.trim() || undefined }
+          const done = {
+            onSuccess: () => { toast.success(existing ? 'Asset updated' : 'Asset created'); onClose() },
+            onError: (err: unknown) => toast.error('Failed', (err as Error).message),
+          }
+          if (existing) update.mutate({ id: existing.id, ...input, condition }, done)
+          else create.mutate(input, done)
         }}
       >
-        <div>
-          <Label htmlFor="as-type">Type</Label>
-          <Select id="as-type" data-testid="asset-type" value={assetType} onChange={(e) => setAssetType(e.target.value)}>
-            {assetTypes.options.map((t) => (<option key={t.code} value={t.code}>{t.name}</option>))}
-          </Select>
+        <div className={existing ? 'grid grid-cols-2 gap-3' : undefined}>
+          <div>
+            <Label htmlFor="as-type">Type</Label>
+            <Select id="as-type" data-testid="asset-type" value={assetType} onChange={(e) => setAssetType(e.target.value)}>
+              {assetTypes.options.map((t) => (<option key={t.code} value={t.code}>{t.name}</option>))}
+              {existing && !assetTypes.options.some((t) => t.code === existing.asset_type) && (
+                <option value={existing.asset_type}>{assetTypes.labelOf(existing.asset_type)}</option>
+              )}
+            </Select>
+          </div>
+          {existing && (
+            <div>
+              <Label htmlFor="as-condition">Condition</Label>
+              <Select id="as-condition" data-testid="asset-condition" value={condition} onChange={(e) => setCondition(e.target.value)}>
+                {ASSET_CONDITIONS.map((c) => (<option key={c.code} value={c.code}>{c.name}</option>))}
+                {!ASSET_CONDITIONS.some((c) => c.code === existing.condition) && (
+                  <option value={existing.condition}>{conditionLabel(existing.condition)}</option>
+                )}
+              </Select>
+            </div>
+          )}
         </div>
         <div>
           <Label htmlFor="as-name">Name</Label>
@@ -173,14 +269,16 @@ function CreateAssetModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" data-testid="create-asset" loading={create.isPending}>Create</Button>
+          <Button type="submit" data-testid={existing ? 'save-asset' : 'create-asset'} loading={pending}>
+            {existing ? 'Save' : 'Create'}
+          </Button>
         </div>
       </form>
     </Modal>
   )
 }
 
-function AssetModal({ asset, onClose }: { asset: Asset; onClose: () => void }) {
+function AssetModal({ asset, onClose, onEdit }: { asset: Asset; onClose: () => void; onEdit: () => void }) {
   const { data: users = [] } = useUsers()
   const { data: history = [] } = useAssetAssignments(asset.id)
   const assign = useAssignAsset()
@@ -202,6 +300,7 @@ function AssetModal({ asset, onClose }: { asset: Asset; onClose: () => void }) {
           <span>Type: <span className="font-medium text-slate-700">{assetTypes.labelOf(asset.asset_type)}</span></span>
           <span>Serial no: <span className="font-mono font-medium text-slate-700">{asset.serial || '—'}</span></span>
           <span>Batch no: <span className="font-mono font-medium text-slate-700">{asset.batch_no || '—'}</span></span>
+          <span>Condition: <span className="font-medium text-slate-700" data-testid="asset-condition-value">{conditionLabel(asset.condition)}</span></span>
         </div>
         <p className="text-sm" data-testid="current-holder">
           Current holder: <strong>{current?.assignee?.full_name ?? 'Unassigned'}</strong>
@@ -251,9 +350,14 @@ function AssetModal({ asset, onClose }: { asset: Asset; onClose: () => void }) {
 
         <div className="flex items-center justify-between border-t border-slate-100 pt-3">
           {!confirmDelete ? (
-            <Button size="sm" variant="danger" data-testid="delete-asset" onClick={() => setConfirmDelete(true)}>
-              <Trash2 className="size-4" /> Delete asset
-            </Button>
+            <span className="flex items-center gap-2">
+              <Button size="sm" variant="outline" data-testid="edit-asset" onClick={onEdit}>
+                <Pencil className="size-4" /> Edit
+              </Button>
+              <Button size="sm" variant="danger" data-testid="delete-asset" onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="size-4" /> Delete asset
+              </Button>
+            </span>
           ) : (
             <span className="flex items-center gap-2 text-sm text-slate-600">
               Delete <strong>{asset.name}</strong> and its history?

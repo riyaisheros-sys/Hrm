@@ -169,12 +169,46 @@ export function useDeleteStep() {
   })
 }
 
+export function useUpdateDefinition() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      name: string
+      description: string
+      entityType: string
+      ownerId: string | null
+      isActive: boolean
+    }) => {
+      const { data, error } = await supabase
+        .from('workflow_definitions')
+        .update({
+          name: input.name,
+          description: input.description.trim() || null,
+          entity_type: input.entityType,
+          owner_id: input.ownerId,
+          is_active: input.isActive,
+        })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this workflow')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['wf-definitions'] }),
+  })
+}
+
 export function useDeleteDefinition() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (definitionId: string) => {
-      const { error } = await supabase.from('workflow_definitions').delete().eq('id', definitionId)
+      const { data, error } = await supabase
+        .from('workflow_definitions')
+        .delete()
+        .eq('id', definitionId)
+        .select('id')
       if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this workflow')
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['wf-definitions'] }),
   })

@@ -35,13 +35,47 @@ export function useCreateAsset() {
   })
 }
 
+/** Edit an asset's details (not its assignment). Requires assets.manage. */
+export function useUpdateAsset() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      assetType: string
+      name: string
+      serial?: string
+      batchNo?: string
+      condition: string
+    }) => {
+      const { data, error } = await supabase
+        .from('assets')
+        .update({
+          asset_type: input.assetType,
+          name: input.name,
+          serial: input.serial || null,
+          batch_no: input.batchNo || null,
+          condition: input.condition,
+        })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this asset')
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['assets'] })
+      qc.invalidateQueries({ queryKey: ['my-assets'] })
+    },
+  })
+}
+
 /** Remove an asset and its assignment history. Requires assets.manage. */
 export function useDeleteAsset() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (assetId: string) => {
-      const { error } = await supabase.from('assets').delete().eq('id', assetId)
+      const { data, error } = await supabase.from('assets').delete().eq('id', assetId).select('id')
       if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this asset')
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['assets'] })
