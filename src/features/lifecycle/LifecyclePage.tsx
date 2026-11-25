@@ -10,10 +10,14 @@ import {
   useResignation,
   useStartExit,
   useUpdateEvent,
+  useUndoClearance,
+  useUpdateResignation,
+  useWithdrawExit,
   type LifecycleEvent,
 } from './hooks'
 import { useTemplates, type OnboardingTemplate } from '@/features/onboarding/hooks'
 import { TemplateModal } from '@/features/onboarding/TemplateModal'
+import { TemplateRowActions } from '@/features/onboarding/TemplateRowActions'
 import { useUsers } from '@/features/admin/users/hooks'
 import { useToast } from '@/components/ui/toast-context'
 import { generateLetterPdf } from '@/lib/pdfLetter'
@@ -26,6 +30,7 @@ import { Label } from '@/components/ui/Label'
 import { Modal } from '@/components/ui/Modal'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { Select } from '@/components/ui/Select'
+import { Textarea } from '@/components/ui/Textarea'
 
 const EVENT_TYPES = [
   'joining',
@@ -49,6 +54,11 @@ export function LifecyclePage() {
   const addEvent = useAddEvent()
   const startExit = useStartExit()
   const clearItem = useClearItem()
+  const updateExit = useUpdateResignation()
+  const withdrawExit = useWithdrawExit()
+  const undoClear = useUndoClearance()
+  const [editExit, setEditExit] = useState(false)
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false)
   const deleteEvent = useDeleteEvent()
   const deleteAllEvents = useDeleteAllEvents()
   const toast = useToast()
@@ -252,10 +262,35 @@ export function LifecyclePage() {
               </form>
             ) : (
               <>
-                <p className="text-sm text-slate-600">
-                  Last working day: <strong>{resignation.last_working_date}</strong> ·{' '}
-                  <Badge tone="amber">{resignation.status}</Badge>
-                </p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm text-slate-600">
+                    Last working day: <strong>{resignation.last_working_date}</strong> ·{' '}
+                    <Badge tone={resignation.status === 'completed' ? 'green' : 'amber'}>
+                      {resignation.status.replace('_', ' ')}
+                    </Badge>
+                    {resignation.reason && (
+                      <span className="block text-xs text-slate-500">Reason: {resignation.reason}</span>
+                    )}
+                  </p>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid="edit-exit"
+                      onClick={() => setEditExit(true)}
+                    >
+                      <Pencil className="size-3.5" /> Edit exit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      data-testid="withdraw-exit"
+                      onClick={() => setConfirmWithdraw(true)}
+                    >
+                      <Trash2 className="size-3.5" /> Withdraw
+                    </Button>
+                  </div>
+                </div>
                 <ul className="space-y-1" data-testid="clearances">
                   {clearances.map((c) => (
                     <li
@@ -265,10 +300,25 @@ export function LifecyclePage() {
                     >
                       <span className="capitalize">{c.clearance_type}</span>
                       {c.status === 'cleared' ? (
-                        <Badge tone="green">
-                          <CheckCircle2 className="mr-1 inline size-3" />
-                          cleared
-                        </Badge>
+                        <span className="flex items-center gap-2">
+                          <Badge tone="green">
+                            <CheckCircle2 className="mr-1 inline size-3" />
+                            cleared
+                          </Badge>
+                          <button
+                            type="button"
+                            data-testid="undo-clearance"
+                            className="text-xs text-slate-500 hover:text-red-600 hover:underline"
+                            onClick={() =>
+                              undoClear.mutate(c.id, {
+                                onSuccess: () => toast.success('Marked as pending again'),
+                                onError: (err) => toast.error('Could not undo', (err as Error).message),
+                              })
+                            }
+                          >
+                            Undo
+                          </button>
+                        </span>
                       ) : (
                         <Button
                           size="sm"
@@ -342,15 +392,18 @@ export function LifecyclePage() {
                         <Badge tone="slate">{t.doc_type}</Badge>
                         {t.title}
                       </span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        data-testid={`generate-exit-${t.doc_type}`}
-                        disabled={!employee}
-                        onClick={() => genFromTemplate(t)}
-                      >
-                        <FileText className="size-4" /> Generate
-                      </Button>
+                      <span className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          data-testid={`generate-exit-${t.doc_type}`}
+                          disabled={!employee}
+                          onClick={() => genFromTemplate(t)}
+                        >
+                          <FileText className="size-4" /> Generate
+                        </Button>
+                        <TemplateRowActions template={t} docTypes={EXIT_DOC_TYPES} />
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -369,6 +422,53 @@ export function LifecyclePage() {
       )}
       {editingEvent && (
         <EditEventModal event={editingEvent} onClose={() => setEditingEvent(null)} />
+      )}
+      {editExit && resignation && (
+        <EditExitModal
+          resignation={resignation}
+          saving={updateExit.isPending}
+          onClose={() => setEditExit(false)}
+          onSave={(values) =>
+            updateExit.mutate(
+              { id: resignation.id, ...values },
+              {
+                onSuccess: () => {
+                  toast.success('Exit updated')
+                  setEditExit(false)
+                },
+                onError: (err) => toast.error('Could not update', (err as Error).message),
+              },
+            )
+          }
+        />
+      )}
+      {confirmWithdraw && resignation && (
+        <ConfirmDialog
+          title="Withdraw exit"
+          testid="withdraw-exit-dialog"
+          confirmLabel="Withdraw exit"
+          loading={withdrawExit.isPending}
+          onClose={() => setConfirmWithdraw(false)}
+          message={
+            <p>
+              Withdraw the exit of{' '}
+              <span className="font-semibold text-slate-900">
+                {employee?.full_name || employee?.email}
+              </span>{' '}
+              (last working day {resignation.last_working_date})? The clearance checklist is removed
+              too. Timeline events stay.
+            </p>
+          }
+          onConfirm={() =>
+            withdrawExit.mutate(resignation.id, {
+              onSuccess: () => {
+                toast.success('Exit withdrawn')
+                setConfirmWithdraw(false)
+              },
+              onError: (err) => toast.error('Could not withdraw', (err as Error).message),
+            })
+          }
+        />
       )}
       {confirmDeleteEvent && (
         <ConfirmDialog
@@ -431,6 +531,80 @@ export function LifecyclePage() {
         />
       )}
     </div>
+  )
+}
+
+function EditExitModal({
+  resignation,
+  saving,
+  onClose,
+  onSave,
+}: {
+  resignation: { last_working_date: string; reason: string | null; status: string }
+  saving: boolean
+  onClose: () => void
+  onSave: (values: {
+    lastWorkingDate: string
+    reason: string
+    status: 'pending' | 'in_clearance' | 'completed'
+  }) => void
+}) {
+  const [date, setDate] = useState(resignation.last_working_date)
+  const [reason, setReason] = useState(resignation.reason ?? '')
+  const [status, setStatus] = useState(resignation.status as 'pending' | 'in_clearance' | 'completed')
+  return (
+    <Modal open onClose={onClose} title="Edit exit" testid="edit-exit-modal">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          onSave({ lastWorkingDate: date, reason, status })
+        }}
+      >
+        <div>
+          <Label htmlFor="exit-edit-date">Last working day</Label>
+          <Input
+            id="exit-edit-date"
+            data-testid="edit-exit-date"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="exit-edit-status">Status</Label>
+          <Select
+            id="exit-edit-status"
+            data-testid="edit-exit-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as typeof status)}
+          >
+            <option value="pending">Pending</option>
+            <option value="in_clearance">In clearance</option>
+            <option value="completed">Completed</option>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="exit-edit-reason">Reason</Label>
+          <Textarea
+            id="exit-edit-reason"
+            data-testid="edit-exit-reason"
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" data-testid="save-exit" loading={saving}>
+            Save
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 

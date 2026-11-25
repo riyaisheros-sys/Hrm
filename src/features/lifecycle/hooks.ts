@@ -145,6 +145,69 @@ export function useStartExit() {
   })
 }
 
+function invalidateExit(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['resignation'] })
+  qc.invalidateQueries({ queryKey: ['clearances'] })
+  qc.invalidateQueries({ queryKey: ['lifecycle'] })
+}
+
+/** Change an exit's last working day, reason or status (lifecycle.manage). */
+export function useUpdateResignation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      lastWorkingDate: string
+      reason: string
+      status: 'pending' | 'in_clearance' | 'completed'
+    }) => {
+      const { data, error } = await supabase
+        .from('resignations')
+        .update({
+          last_working_date: input.lastWorkingDate,
+          reason: input.reason.trim() || null,
+          status: input.status,
+        })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this exit')
+    },
+    onSuccess: () => invalidateExit(qc),
+  })
+}
+
+/** Withdraw an exit: removes it and its clearance checklist. */
+export function useWithdrawExit() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from('resignations').delete().eq('id', id).select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to withdraw this exit')
+    },
+    onSuccess: () => invalidateExit(qc),
+  })
+}
+
+/** Put a cleared item back to pending (needs the lifecycle migration). */
+export function useUndoClearance() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from('exit_clearances')
+        .update({ status: 'pending', cleared_by: null, cleared_at: null })
+        .eq('id', id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length)
+        throw new Error('Undoing a clearance needs the pending database update.')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['clearances'] }),
+  })
+}
+
 export function useClearItem() {
   const qc = useQueryClient()
   return useMutation({

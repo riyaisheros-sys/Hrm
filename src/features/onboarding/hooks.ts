@@ -31,6 +31,38 @@ export function useCreateTemplate() {
   })
 }
 
+export function useUpdateTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; docType: string; title: string; body: string }) => {
+      const { data, error } = await supabase
+        .from('onboarding_templates')
+        .update({ doc_type: input.docType, title: input.title, body: input.body })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this template')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['onboarding-templates'] }),
+  })
+}
+
+export function useDeleteTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from('onboarding_templates')
+        .delete()
+        .eq('id', id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this template')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['onboarding-templates'] }),
+  })
+}
+
 export function useOnboarding(employeeId: string | null) {
   return useQuery({
     queryKey: ['onboarding', employeeId],

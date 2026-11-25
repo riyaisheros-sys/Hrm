@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useCreateTemplate } from './hooks'
+import { useCreateTemplate, useUpdateTemplate, type OnboardingTemplate } from './hooks'
 import { useToast } from '@/components/ui/toast-context'
 import { Button } from '@/components/ui/Button'
 import { Modal } from '@/components/ui/Modal'
@@ -8,32 +8,47 @@ import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 
-/** Create a document template limited to the given doc types (onboarding or exit). */
+/** Create or edit a document template limited to the given doc types (onboarding or exit). */
 export function TemplateModal({
   docTypes,
-  title: modalTitle = 'New document template',
+  title: modalTitle,
+  template,
   onClose,
 }: {
   docTypes: readonly string[]
   title?: string
+  /** Edit this template instead of creating a new one. */
+  template?: OnboardingTemplate | null
   onClose: () => void
 }) {
   const create = useCreateTemplate()
+  const update = useUpdateTemplate()
   const toast = useToast()
-  const [docType, setDocType] = useState(docTypes[0])
-  const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
+  const [docType, setDocType] = useState(template?.doc_type ?? docTypes[0])
+  const [title, setTitle] = useState(template?.title ?? '')
+  const [body, setBody] = useState(template?.body ?? '')
+  const done = {
+    onSuccess: () => {
+      toast.success(template ? 'Template updated' : 'Template created')
+      onClose()
+    },
+    onError: (err: unknown) => toast.error('Failed', (err as Error).message),
+  }
 
   return (
-    <Modal open onClose={onClose} title={modalTitle} testid="template-modal">
+    <Modal
+      open
+      onClose={onClose}
+      title={modalTitle ?? (template ? 'Edit document template' : 'New document template')}
+      testid="template-modal"
+    >
       <form
         className="space-y-4"
         onSubmit={(e) => {
           e.preventDefault()
-          create.mutate(
-            { docType, title: title.trim(), body },
-            { onSuccess: () => { toast.success('Template created'); onClose() }, onError: (err) => toast.error('Failed', (err as Error).message) },
-          )
+          const input = { docType, title: title.trim(), body }
+          if (template) update.mutate({ id: template.id, ...input }, done)
+          else create.mutate(input, done)
         }}
       >
         <div>
@@ -52,7 +67,9 @@ export function TemplateModal({
         </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-          <Button type="submit" data-testid="create-template" loading={create.isPending}>Create</Button>
+          <Button type="submit" data-testid="create-template" loading={create.isPending || update.isPending}>
+            {template ? 'Save' : 'Create'}
+          </Button>
         </div>
       </form>
     </Modal>

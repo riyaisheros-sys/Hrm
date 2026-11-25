@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { FileText, Plus } from 'lucide-react'
 import { useTemplates, type OnboardingTemplate } from './hooks'
 import { TemplateModal } from './TemplateModal'
+import { TemplateRowActions } from './TemplateRowActions'
 import { useUsers } from '@/features/admin/users/hooks'
 import { useDepartments, useTeams } from '@/features/admin/hierarchy/hooks'
 import { generateLetterPdf } from '@/lib/pdfLetter'
@@ -148,15 +149,18 @@ export function OnboardingPage() {
                   <Badge tone="slate">{t.doc_type}</Badge>
                   {t.title}
                 </span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  data-testid={`generate-doc-${t.doc_type}`}
-                  disabled={!employee}
-                  onClick={() => setVarsFor(t)}
-                >
-                  <FileText className="size-4" /> Generate
-                </Button>
+                <span className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-testid={`generate-doc-${t.doc_type}`}
+                    disabled={!employee}
+                    onClick={() => setVarsFor(t)}
+                  >
+                    <FileText className="size-4" /> Generate
+                  </Button>
+                  <TemplateRowActions template={t} docTypes={DOC_TYPES} />
+                </span>
               </li>
             ))}
           </ul>
