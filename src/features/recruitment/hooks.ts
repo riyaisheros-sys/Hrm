@@ -30,6 +30,146 @@ export function useOpenings() {
   })
 }
 
+/** Details added to openings / candidates on 26 Nov (all optional). */
+export interface OpeningDetails {
+  positions?: number | null
+  location?: string | null
+  employment_type?: string | null
+  experience_required?: string | null
+  salary_range?: string | null
+  closing_date?: string | null
+  hiring_manager_id?: string | null
+}
+export interface CandidateDetails {
+  current_company?: string | null
+  current_designation?: string | null
+  experience_years?: number | null
+  current_ctc?: number | null
+  expected_ctc?: number | null
+  notice_period_days?: number | null
+  location?: string | null
+  source?: string | null
+  referred_by?: string | null
+  skills?: string | null
+  notes?: string | null
+}
+
+/**
+ * Only send detail fields that have a value (new rows) or that changed
+ * (existing rows), so saving keeps working on a database that does not have
+ * the new columns yet.
+ */
+function detailPatch<T extends object>(details: T, before?: Record<string, unknown> | null) {
+  const out: Record<string, unknown> = {}
+  for (const [key, raw] of Object.entries(details)) {
+    const value = raw === '' || raw === undefined ? null : raw
+    if (before) {
+      if (!(key in before) && value == null) continue
+      if ((before[key] ?? null) === value) continue
+    } else if (value == null) continue
+    out[key] = value
+  }
+  return out
+}
+
+export function useSaveOpening() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id?: string
+      before?: OpeningRow | null
+      departmentId: string
+      designation: string
+      description?: string
+      status?: string
+      details: OpeningDetails
+    }) => {
+      if (!input.designation.trim()) throw new Error('Designation is required')
+      const base: Record<string, unknown> = {
+        title: input.designation.trim(),
+        designation: input.designation.trim(),
+        department_id: input.departmentId || null,
+        description: input.description?.trim() || null,
+      }
+      if (input.status) base.status = input.status
+      const values = {
+        ...base,
+        ...detailPatch(input.details, input.before as unknown as Record<string, unknown>),
+      }
+      if (input.id) {
+        const { data, error } = await supabase
+          .from('job_openings')
+          .update(values as never)
+          .eq('id', input.id)
+          .select('id')
+        if (error) throw error
+        if (!data?.length) throw new Error('Not allowed to edit this opening')
+      } else {
+        const { error } = await supabase.from('job_openings').insert(values as never)
+        if (error) throw error
+      }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['openings'] }),
+  })
+}
+
+/** Deletes an opening and (by cascade) its candidates, interviews and documents rows. */
+export function useDeleteOpening() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from('job_openings').delete().eq('id', id).select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this opening')
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['openings'] })
+      qc.invalidateQueries({ queryKey: ['candidates'] })
+    },
+  })
+}
+
+export function useSaveCandidateDetails() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      before: Candidate
+      fullName: string
+      email: string
+      phone?: string
+      details: CandidateDetails
+    }) => {
+      const values = {
+        full_name: input.fullName.trim(),
+        email: input.email.trim(),
+        phone: input.phone?.trim() || null,
+        ...detailPatch(input.details, input.before as unknown as Record<string, unknown>),
+      }
+      const { data, error } = await supabase
+        .from('candidates')
+        .update(values as never)
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this candidate')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['candidates'] }),
+  })
+}
+
+export function useDeleteCandidate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from('candidates').delete().eq('id', id).select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this candidate')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['candidates'] }),
+  })
+}
+
 export function useCreateOpening() {
   const qc = useQueryClient()
   return useMutation({
@@ -77,6 +217,7 @@ export function useAddCandidate() {
       fullName: string
       email: string
       phone?: string
+      details?: CandidateDetails
     }) => {
       const { data, error } = await supabase
         .from('candidates')
@@ -85,7 +226,8 @@ export function useAddCandidate() {
           full_name: input.fullName,
           email: input.email,
           phone: input.phone || null,
-        })
+          ...detailPatch(input.details ?? {}),
+        } as never)
         .select('id')
         .single()
       if (error) throw error
