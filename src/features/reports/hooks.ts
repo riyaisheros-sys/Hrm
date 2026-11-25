@@ -80,6 +80,40 @@ export const REPORT_LABELS: Record<ReportType, string> = {
  * Read once per report; missing columns fall back to defaults so the reports
  * keep working on a database that has not had the setting added yet.
  */
+/**
+ * Planning slots linked to tasks through planning_slot_tasks (a slot with
+ * several tasks), keyed by task id, limited to the plan-date range. Empty when
+ * that table is not there yet.
+ */
+async function linkedPlanningSlots(
+  taskIds: string[],
+  from?: string,
+  to?: string,
+): Promise<Map<string, TaskRow['planning_slots']>> {
+  const out = new Map<string, TaskRow['planning_slots']>()
+  if (!taskIds.length) return out
+  let q = supabase
+    .from('planning_slot_tasks' as 'tasks')
+    .select(
+      'task_id, slot:planning_slots!inner(id,plan_date,start_time,end_time,progress,remarks,challenges,task_name,created_at)' as '*',
+    )
+    .in('task_id' as 'id', taskIds)
+  if (from) q = q.gte('slot.plan_date' as 'id', from)
+  if (to) q = q.lte('slot.plan_date' as 'id', to)
+  const { data, error } = await q
+  if (error) return out
+  for (const row of (data ?? []) as unknown as Array<{
+    task_id: string
+    slot: TaskRow['planning_slots'][number] | null
+  }>) {
+    if (!row.slot) continue
+    const list = out.get(row.task_id) ?? []
+    list.push(row.slot)
+    out.set(row.task_id, list)
+  }
+  return out
+}
+
 async function loadLateRule() {
   const [planning, attendance] = await Promise.all([
     supabase.from('planning_config').select('*').maybeSingle(),
@@ -161,6 +195,7 @@ interface TaskRow {
     changer: { full_name: string | null; email: string } | null
   }[]
   planning_slots: {
+    id?: string
     plan_date: string
     start_time: string | null
     end_time: string | null
@@ -360,9 +395,9 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
     let q = supabase
       .from('tasks')
       .select(
-        'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by,to_status:task_statuses!task_status_history_to_status_id_fkey(name),changer:profiles!task_status_history_changed_by_fkey(full_name,email)),planning_slots' +
-          (byPlanning ? '!inner' : '') +
-          '(plan_date,start_time,end_time,progress,remarks,challenges,task_name,created_at)',
+        'id,title,description,priority,due_date,created_at,updated_at,completed_at,accepted_at,submitted_at,approved_at,rejected_at,rejection_reason,rework_reason,progress_percent,remarks,task_type,bulk_key,status:task_statuses(name,slug,is_terminal),category:task_categories(name),assignee:profiles!tasks_assignee_id_fkey(id,full_name,email,employee_code),creator:profiles!tasks_created_by_fkey(id,full_name,email,employee_code),approver:profiles!tasks_approved_by_fkey(full_name,email),task_status_history(remarks,created_at,changed_by,to_status:task_statuses!task_status_history_to_status_id_fkey(name),changer:profiles!task_status_history_changed_by_fkey(full_name,email)),' +
+          // Named FK: planning_slot_tasks adds a second tasks ↔ planning_slots path.
+          'planning_slots!planning_slots_task_id_fkey(id,plan_date,start_time,end_time,progress,remarks,challenges,task_name,created_at)',
       )
     if (f.userId) q = q.eq('assignee_id', f.userId)
     if (!byPlanning) {
@@ -389,7 +424,22 @@ const fetchers: Record<ReportType, (f: ReportFilters) => Promise<ReportData>> = 
       loadLateRule(),
     ])
     if (error) throw error
-    const list = (data ?? []) as unknown as TaskRow[]
+    // Slots can carry several tasks (planning_slot_tasks); add the slots that
+    // name a task as an extra task, then — in "planning update date" mode —
+    // keep only tasks with at least one planning update in the range.
+    const fetched = (data ?? []) as unknown as TaskRow[]
+    const extra = await linkedPlanningSlots(
+      fetched.map((t) => t.id),
+      f.from,
+      f.to,
+    )
+    for (const t of fetched) {
+      const more = extra.get(t.id)
+      if (!more?.length) continue
+      const have = new Set((t.planning_slots ?? []).map((s) => s.id))
+      t.planning_slots = [...(t.planning_slots ?? []), ...more.filter((s) => !have.has(s.id))]
+    }
+    const list = byPlanning ? fetched.filter((t) => (t.planning_slots ?? []).length > 0) : fetched
     const lateOf = (slot: TaskRow['planning_slots'][number]) =>
       planningLateMinutes({
         planDate: slot.plan_date,

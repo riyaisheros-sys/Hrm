@@ -69,13 +69,16 @@ export function useUpsertSlot() {
       slotLabel: string
       taskName: string
       taskId?: string | null
+      /** Every task worked on in this slot (first one is also `taskId`). */
+      taskIds?: string[]
       progress: number
       challenges?: string
       remarks?: string
       startTime?: string | null
       endTime?: string | null
     }) => {
-      const { error } = await supabase.from('planning_slots').upsert(
+      const taskIds = [...new Set((s.taskIds ?? (s.taskId ? [s.taskId] : [])).filter(Boolean))]
+      const { data: saved, error } = await supabase.from('planning_slots').upsert(
         {
           user_id: user!.id,
           plan_date: s.planDate,
@@ -83,7 +86,7 @@ export function useUpsertSlot() {
           slot_index: s.slotIndex,
           slot_label: s.slotLabel,
           task_name: s.taskName,
-          task_id: s.taskId || null,
+          task_id: taskIds[0] ?? s.taskId ?? null,
           progress: s.progress,
           challenges: s.challenges || null,
           remarks: s.remarks || null,
@@ -92,9 +95,64 @@ export function useUpsertSlot() {
         },
         { onConflict: 'user_id,plan_date,kind,slot_index' },
       )
+        .select('id')
+        .single()
       if (error) throw error
+      await syncSlotTasks(saved.id, taskIds)
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['planning-slots'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['planning-slots'] })
+      qc.invalidateQueries({ queryKey: ['slot-tasks'] })
+    },
+  })
+}
+
+// planning_slot_tasks is newer than the generated types.
+const slotTasks = () => supabase.from('planning_slot_tasks' as 'planning_slots')
+
+/** Make the slot's linked tasks exactly `taskIds`. */
+async function syncSlotTasks(slotId: string, taskIds: string[]) {
+  const { data, error } = await slotTasks()
+    .select('task_id' as '*')
+    .eq('slot_id' as 'id', slotId)
+  if (error) {
+    // Before the migration only one task per slot is possible.
+    if (taskIds.length > 1)
+      throw new Error(
+        'Several tasks in one slot needs the pending database update. The first task was saved.',
+      )
+    return
+  }
+  const have = new Set(((data ?? []) as unknown as { task_id: string }[]).map((r) => r.task_id))
+  const add = taskIds.filter((id) => !have.has(id))
+  const drop = [...have].filter((id) => !taskIds.includes(id))
+  if (add.length) {
+    const { error: e } = await slotTasks().insert(
+      add.map((task_id) => ({ slot_id: slotId, task_id })) as never,
+    )
+    if (e) throw e
+  }
+  if (drop.length) {
+    const { error: e } = await slotTasks()
+      .delete()
+      .eq('slot_id' as 'id', slotId)
+      .in('task_id' as 'id', drop)
+    if (e) throw e
+  }
+}
+
+/** Task ids linked to a slot (several tasks in one slot). */
+export function useSlotTaskIds(slotId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['slot-tasks', slotId],
+    enabled: !!slotId,
+    queryFn: async () => {
+      const { data, error } = await slotTasks()
+        .select('task_id' as '*')
+        .eq('slot_id' as 'id', slotId!)
+      if (error) return [] as string[]
+      return ((data ?? []) as unknown as { task_id: string }[]).map((r) => r.task_id)
+    },
   })
 }
 
@@ -220,19 +278,60 @@ export function usePunchLockOverview() {
 
 export type UnlockHistoryEntry = Tables<'planning_unlock_history'>
 
-/** Audit trail of admin unlocks, newest first. */
-export function useUnlockHistory() {
+/**
+ * Audit trail of admin unlocks, newest first, for a period of unlocked days
+ * (`from` / `to` on the unlocked work date) and optionally one employee.
+ */
+export function useUnlockHistory(filter: { from?: string; to?: string; userId?: string } = {}) {
   return useQuery({
-    queryKey: ['unlock-history'],
+    queryKey: ['unlock-history', filter.from ?? '', filter.to ?? '', filter.userId ?? ''],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('planning_unlock_history')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(50)
+        .limit(500)
+      if (filter.from) q = q.gte('work_date', filter.from)
+      if (filter.to) q = q.lte('work_date', filter.to)
+      if (filter.userId) q = q.eq('user_id', filter.userId)
+      const { data, error } = await q
       if (error) throw error
       return data as UnlockHistoryEntry[]
     },
+  })
+}
+
+function invalidateUnlocks(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['unlock-history'] })
+  qc.invalidateQueries({ queryKey: ['punch-lock-overview'] })
+  qc.invalidateQueries({ queryKey: ['punch-in-lock'] })
+  qc.invalidateQueries({ queryKey: ['report'] })
+}
+
+/** Change the remark of an unlock (needs attendance.unlock). */
+export function useEditUnlock() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; remarks: string }) => {
+      const { error } = await supabase.rpc('edit_planning_unlock' as never, {
+        p_id: input.id,
+        p_remarks: input.remarks,
+      } as never)
+      if (error) throw error
+    },
+    onSuccess: () => invalidateUnlocks(qc),
+  })
+}
+
+/** Undo an unlock: the day counts as not unlocked again (needs attendance.unlock). */
+export function useRemoveUnlock() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.rpc('remove_planning_unlock' as never, { p_id: id } as never)
+      if (error) throw error
+    },
+    onSuccess: () => invalidateUnlocks(qc),
   })
 }
 

@@ -302,10 +302,23 @@ export function useTaskPlanning(taskId: string | null) {
     queryKey: ['task-planning', taskId],
     enabled: !!taskId,
     queryFn: async () => {
+      // Slots whose main task is this one, plus slots that list it as one of
+      // several tasks (planning_slot_tasks; ignored before that table exists).
+      const links = await supabase
+        .from('planning_slot_tasks' as 'planning_slots')
+        .select('slot_id' as '*')
+        .eq('task_id', taskId!)
+      const linkedIds = links.error
+        ? []
+        : ((links.data ?? []) as unknown as { slot_id: string }[]).map((l) => l.slot_id)
       const { data, error } = await supabase
         .from('planning_slots')
         .select('id,plan_date,start_time,end_time,progress,remarks,challenges,task_name,user:profiles!planning_slots_user_id_fkey(full_name,email)')
-        .eq('task_id', taskId!)
+        .or(
+          linkedIds.length
+            ? `task_id.eq.${taskId},id.in.(${linkedIds.join(',')})`
+            : `task_id.eq.${taskId}`,
+        )
         .order('plan_date', { ascending: false })
         .order('start_time', { ascending: true })
       if (error) throw error

@@ -6,6 +6,7 @@ import {
   usePlanningConfig,
   usePlanningHistory,
   usePlanningSlots,
+  useSlotTaskIds,
   useUpsertSlot,
   type PlanningSlot,
 } from './hooks'
@@ -309,7 +310,18 @@ function SlotFormModal({
   const [planning, setPlanning] = useState(slot?.task_name ?? '')
   const initialTask = tasks.find((task) => task.id === slot?.task_id)
   const [categoryId, setCategoryId] = useState(initialTask?.category_id ?? '')
-  const [taskId, setTaskId] = useState(slot?.task_id ?? '')
+  // Several tasks can be worked on in one slot; the first is the slot's main task.
+  const { data: linkedIds } = useSlotTaskIds(slot?.id)
+  const [pickedIds, setPickedIds] = useState<string[] | null>(null)
+  const taskIds = pickedIds ?? (linkedIds?.length ? linkedIds : slot?.task_id ? [slot.task_id] : [])
+  const titleOf = (id: string) => tasks.find((t) => t.id === id)?.title ?? 'Task'
+  const autoText = (ids: string[]) => ids.map(titleOf).join(' + ')
+  const toggleTask = (id: string) => {
+    const next = taskIds.includes(id) ? taskIds.filter((x) => x !== id) : [...taskIds, id]
+    // Keep the planning text in step while it is still the automatic one.
+    if (!planning.trim() || planning === autoText(taskIds)) setPlanning(autoText(next))
+    setPickedIds(next)
+  }
   const [working, setWorking] = useState(slot?.remarks ?? '')
   const [progress, setProgress] = useState(slot?.progress ?? 0)
   const [challenges, setChallenges] = useState(slot?.challenges ?? '')
@@ -339,7 +351,8 @@ function SlotFormModal({
               slotIndex,
               slotLabel: slotLabelFromRange(start, end),
               taskName: planning,
-              taskId: taskId || null,
+              taskId: taskIds[0] ?? null,
+              taskIds,
               progress,
               challenges,
               remarks: working,
@@ -408,11 +421,7 @@ function SlotFormModal({
                 id="slot-form-category"
                 data-testid="slot-form-category"
                 value={categoryId}
-                onChange={(e) => {
-                  setCategoryId(e.target.value)
-                  setTaskId('')
-                  setPlanning('')
-                }}
+                onChange={(e) => setCategoryId(e.target.value)}
               >
                 <option value="">All groups</option>
                 {categories
@@ -425,28 +434,60 @@ function SlotFormModal({
                   ))}
               </Select>
             </div>
-            <div>
-              <Label htmlFor="slot-form-task">Pending task</Label>
-              <Select
-                id="slot-form-task"
-                data-testid="slot-form-task"
-                value={taskId}
-                onChange={(e) => {
-                  const selected = tasks.find((task) => task.id === e.target.value)
-                  setTaskId(e.target.value)
-                  setPlanning(selected?.title ?? '')
-                }}
-              >
-                <option value="">Select a pending task</option>
-                {pendingTasks
-                  .slice()
-                  .sort((a, b) => a.title.localeCompare(b.title))
-                  .map((task) => (
-                    <option key={task.id} value={task.id}>
-                      {task.title}
-                    </option>
+            <div className="sm:col-span-2">
+              <Label>Tasks in this slot</Label>
+              {taskIds.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5" data-testid="slot-form-picked">
+                  {taskIds.map((id, i) => (
+                    <span
+                      key={id}
+                      className="bg-brand-50 text-brand-800 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                    >
+                      {i === 0 && <span className="text-brand-500">Main ·</span>}
+                      {titleOf(id)}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${titleOf(id)} from this slot`}
+                        className="text-brand-400 hover:text-brand-800"
+                        onClick={() => toggleTask(id)}
+                      >
+                        ×
+                      </button>
+                    </span>
                   ))}
-              </Select>
+                </div>
+              )}
+              <div
+                className="max-h-40 overflow-y-auto rounded-lg border border-slate-200 bg-white"
+                data-testid="slot-form-task-list"
+              >
+                {pendingTasks.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-slate-400">No pending tasks in this group.</p>
+                ) : (
+                  pendingTasks
+                    .slice()
+                    .sort((a, b) => a.title.localeCompare(b.title))
+                    .map((task) => (
+                      <label
+                        key={task.id}
+                        className="flex cursor-pointer items-center gap-2 border-b border-slate-100 px-3 py-1.5 text-sm last:border-b-0 hover:bg-slate-50"
+                      >
+                        <input
+                          type="checkbox"
+                          className="accent-brand-600"
+                          data-testid={`slot-form-task-opt`}
+                          checked={taskIds.includes(task.id)}
+                          onChange={() => toggleTask(task.id)}
+                        />
+                        <span className="text-slate-800">{task.title}</span>
+                      </label>
+                    ))
+                )}
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Tick every task you will work on in this slot. The update below is recorded
+                against each of them.
+              </p>
             </div>
           </div>
           <p className="mt-2 text-xs text-slate-500">
