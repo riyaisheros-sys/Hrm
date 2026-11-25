@@ -222,7 +222,12 @@ export function AdminDashboard() {
     today,
     attendance.map((r) => r.user_id),
   )
-  const absentToday = attendance.filter((r) => r.status === 'absent').length + roster.notPunched.length
+  // Absent = not at work: marked absent, never punched, or on approved full-day
+  // leave — the same people the Attendance Monitor's Absent list shows.
+  const absentToday =
+    attendance.filter((r) => r.status === 'absent').length +
+    roster.notPunched.length +
+    (roster.offDay ? 0 : roster.onLeave.length)
   const attendanceLink = (status: string) => `/admin/attendance?date=${today}&status=${status}`
   const overtimeToday = attendance.reduce((sum, r) => sum + (r.overtime_minutes ?? 0), 0)
   const missedPunchOuts = attendance.filter((r) => r.missed_punch_out).length

@@ -40,16 +40,17 @@ import { usePagination } from '@/lib/usePagination'
 import { SortFilterTh } from '@/components/ui/SortFilterTh'
 import { useTableControls } from '@/lib/useTableControls'
 
-type StatusFilter = '' | 'present' | 'absent' | 'late' | 'overtime' | 'missed'
+type StatusFilter = '' | 'present' | 'absent' | 'leave' | 'late' | 'overtime' | 'missed'
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: '', label: 'All' },
   { value: 'present', label: 'Present' },
-  { value: 'absent', label: 'Absent' },
+  { value: 'absent', label: 'Absent (incl. on leave)' },
+  { value: 'leave', label: 'On approved leave' },
   { value: 'late', label: 'Late arrivals' },
   { value: 'overtime', label: 'With overtime' },
   { value: 'missed', label: 'Missed punch-out' },
 ]
-type MonitorRow = AdminAttendanceRow & { _noPunch?: boolean }
+type MonitorRow = AdminAttendanceRow & { _noPunch?: boolean; _onLeave?: boolean }
 
 export function AttendanceMonitorPage() {
   const { hasPermission } = useProfile()
@@ -83,11 +84,20 @@ export function AttendanceMonitorPage() {
   // so they have no attendance_days record — but they ARE absent. Who counts
   // as "expected" is decided by the shared roster rule (same as the dashboard).
   // Only meaningful for a single day.
-  const rosterAbsent = roster.notPunched
+  // People on approved full-day leave are not at work either: they are listed
+  // as absent too, marked "On leave" so they can be told apart (client, 26 Nov).
+  const rosterAbsent = useMemo(
+    () => [
+      ...roster.notPunched.map((u) => ({ u, onLeave: false })),
+      // On a Sunday / holiday nobody is expected, so leave does not matter.
+      ...(roster.offDay ? [] : roster.onLeave).map((u) => ({ u, onLeave: true })),
+    ],
+    [roster.notPunched, roster.onLeave, roster.offDay],
+  )
   const notPunched = useMemo<MonitorRow[]>(() => {
     if (multiDay) return []
     return rosterAbsent.map(
-      (u) =>
+      ({ u, onLeave }) =>
         ({
           id: `not-punched-${u.id}`,
           user_id: u.id,
@@ -105,7 +115,8 @@ export function AttendanceMonitorPage() {
           is_manual: false,
           remarks: null,
           profiles: { full_name: u.full_name, email: u.email },
-          _noPunch: true,
+          _noPunch: !onLeave,
+          _onLeave: onLeave,
         }) as unknown as MonitorRow,
     )
   }, [rosterAbsent, multiDay, from])
@@ -116,6 +127,8 @@ export function AttendanceMonitorPage() {
         return rows.filter((r) => r.status !== 'absent')
       case 'absent':
         return [...rows.filter((r) => r.status === 'absent'), ...notPunched]
+      case 'leave':
+        return notPunched.filter((r) => r._onLeave)
       case 'late':
         return rows.filter((r) => r.is_late)
       case 'overtime':
@@ -123,7 +136,8 @@ export function AttendanceMonitorPage() {
       case 'missed':
         return rows.filter((r) => r.missed_punch_out)
       default:
-        return rows
+        // The daily list is the whole roster: who came, and who did not.
+        return [...rows, ...notPunched]
     }
   }, [rows, notPunched, statusFilter])
   const controls = useTableControls(filteredRows, {
@@ -484,6 +498,7 @@ export function AttendanceMonitorPage() {
                         <div className="flex flex-wrap gap-1">
                           {sunday && <Badge className={SUNDAY_META.className}>Sunday</Badge>}
                           {r._noPunch && <Badge tone="slate">No punch</Badge>}
+                          {r._onLeave && <Badge tone="blue">On leave (approved)</Badge>}
                           {r.overtime_minutes > 0 && (
                             <Badge tone="blue">OT {r.overtime_minutes}m</Badge>
                           )}
