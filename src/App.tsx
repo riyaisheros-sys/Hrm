@@ -42,6 +42,7 @@ import { MastersPage } from '@/features/admin/masters/MastersPage'
 import { EmployeePanelPage } from '@/features/admin/employee-panel/EmployeePanelPage'
 import { KraKpiMasterPage } from '@/features/performance/KraKpiMasterPage'
 import { AttendanceSettingsPage } from '@/features/attendance/AttendanceSettingsPage'
+import { OrgStructurePage } from '@/features/admin/hierarchy/OrgStructurePage'
 
 export function App() {
   return (
@@ -146,6 +147,7 @@ export function App() {
           }
         />
         <Route path="/policies" element={<PolicyPage />} />
+        <Route path="/org-structure" element={<OrgStructurePage />} />
         <Route path="/helpdesk" element={<HelpdeskPage />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
         <Route path="/visitors" element={<MyVisitorsPage />} />

@@ -11,6 +11,10 @@ export interface Person {
   avatar_url: string | null
   status: string
   department_id: string | null
+  team_id?: string | null
+  reporting_manager_id?: string | null
+  /** Designation name (people_directory only). */
+  designation?: string | null
 }
 
 /**
@@ -28,7 +32,7 @@ export function usePeople() {
       if (!rpc.error) return (rpc.data as unknown as Person[]) ?? []
       const { data, error } = await supabase
         .from('profiles')
-        .select('id,full_name,email,employee_code,avatar_url,status,department_id')
+        .select('id,full_name,email,employee_code,avatar_url,status,department_id,team_id,reporting_manager_id')
         .order('full_name')
       if (error) throw error
       return (data ?? []) as Person[]

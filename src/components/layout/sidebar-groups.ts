@@ -54,6 +54,7 @@ export const SIDEBAR_GROUP_FOR: Record<string, Record<string, string>> = {
     // Reports — view-only surfaces
     'nav-monitoring':        'reports',
     'nav-reports':           'reports',
+    'nav-org-structure':     'reports',
     'nav-audit':             'reports',
   },
   employee: {
@@ -75,6 +76,7 @@ export const SIDEBAR_GROUP_FOR: Record<string, Record<string, string>> = {
     'nav-recognition':    'reports',
     'nav-my-assets':      'reports',
     'nav-monitoring-self':'reports',
+    'nav-org-structure':  'reports',
   },
 }
 

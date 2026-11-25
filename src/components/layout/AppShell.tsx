@@ -63,6 +63,7 @@ export interface NavItem {
 
 const adminNav: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+  { to: '/org-structure', label: 'Organization Structure', icon: Network, testid: 'nav-org-structure' },
   {
     to: '/admin/attendance',
     label: 'Attendance',
@@ -232,6 +233,7 @@ const adminNav: NavItem[] = [
 
 export const employeeNav: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, testid: 'nav-dashboard' },
+  { to: '/org-structure', label: 'Organization Structure', icon: Network, testid: 'nav-org-structure' },
   {
     to: '/attendance',
     label: 'My Attendance',
