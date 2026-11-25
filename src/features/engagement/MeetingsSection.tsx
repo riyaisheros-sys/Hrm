@@ -19,6 +19,8 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Modal } from '@/components/ui/Modal'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Select } from '@/components/ui/Select'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { useProfile } from '@/features/rbac/profile-context'
 
 const INVITE_TONE: Record<string, 'slate' | 'green' | 'red'> = {
   invited: 'slate',
@@ -35,7 +37,12 @@ export function MeetingsSection() {
   const respond = useRespondToInvite()
   const del = useDeleteMeeting()
   const toast = useToast()
+  const { hasPermission } = useProfile()
+  // Admins (visitors.manage) may delete any meeting; hosts their own.
+  const canManage = hasPermission('visitors.manage')
   const [hostModal, setHostModal] = useState(false)
+  const [deleting, setDeleting] = useState<MeetingRow | null>(null)
+  const askDelete = (id: string) => setDeleting(meetings.find((m) => m.id === id) ?? null)
 
   const nameById = useMemo(
     () => new Map(directory.map((d) => [d.id, d.full_name || d.email])),
@@ -80,12 +87,8 @@ export function MeetingsSection() {
                       },
                     )
                   }
-                  onDelete={(id) =>
-                    del.mutate(id, {
-                      onSuccess: () => toast.success('Meeting cancelled'),
-                      onError: (err) => toast.error('Failed', (err as Error).message),
-                    })
-                  }
+                  canManage={canManage}
+                  onDelete={askDelete}
                 />
               ))}
             </div>
@@ -108,6 +111,8 @@ export function MeetingsSection() {
                         { onSuccess: () => toast.success('Meeting attendance updated') },
                       )
                     }
+                    canManage={canManage}
+                    onDelete={askDelete}
                   />
                 ))}
               </div>
@@ -117,6 +122,31 @@ export function MeetingsSection() {
       )}
 
       {hostModal && <HostMeetingModal onClose={() => setHostModal(false)} />}
+      {deleting && (
+        <ConfirmDialog
+          title="Delete meeting"
+          testid="delete-meeting-dialog"
+          confirmLabel="Delete meeting"
+          loading={del.isPending}
+          onClose={() => setDeleting(null)}
+          message={
+            <p>
+              Delete <span className="font-semibold text-slate-900">{deleting.title}</span> (
+              {new Date(deleting.starts_at).toLocaleString()})? Invitees will no longer see it.
+              This cannot be undone.
+            </p>
+          }
+          onConfirm={() =>
+            del.mutate(deleting.id, {
+              onSuccess: () => {
+                toast.success('Meeting deleted')
+                setDeleting(null)
+              },
+              onError: (err) => toast.error('Failed', (err as Error).message),
+            })
+          }
+        />
+      )}
     </section>
   )
 }
@@ -127,7 +157,9 @@ function MeetingCard({
   nameById,
   onRespond,
   onDelete,
+  canManage = false,
 }: {
+  canManage?: boolean
   meeting: MeetingRow
   meId?: string
   nameById: Map<string, string>
@@ -152,11 +184,11 @@ function MeetingCard({
               Hosted by {isHost ? 'you' : (nameById.get(meeting.host_id) ?? '—')}
             </p>
           </div>
-          {isHost && onDelete && (
+          {(isHost || canManage) && onDelete && (
             <button
               data-testid="delete-meeting"
-              aria-label={`Cancel meeting ${meeting.title}`}
-              className="text-slate-300 hover:text-red-600"
+              aria-label={`Delete meeting ${meeting.title}`}
+              className="text-slate-400 hover:text-red-600"
               onClick={() => onDelete(meeting.id)}
             >
               <Trash2 className="size-4" />

@@ -1,3 +1,4 @@
+import { useMasterOptions, type MasterOption } from '@/lib/masterOptions'
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, Pencil, Plus, Trash2 } from 'lucide-react'
 import {
@@ -27,8 +28,14 @@ import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { cn } from '@/lib/cn'
 
-function entityLabel(value: string) {
-  return WORKFLOW_ENTITY_TYPES.find((t) => t.value === value)?.label ?? value
+// Entity types are managed in Centralized Masters → Workflow Entity Types;
+// the built-in list is used until that master exists on the database.
+const FALLBACK_ENTITY_TYPES: MasterOption[] = WORKFLOW_ENTITY_TYPES.map((t) => ({
+  code: t.value,
+  name: t.label,
+}))
+function useEntityTypes() {
+  return useMasterOptions('workflow_entity_types', FALLBACK_ENTITY_TYPES)
 }
 
 /** Admin view: every user's workflows, filterable by owner. */
@@ -42,6 +49,7 @@ export function MyWorkflowsPage() {
 }
 
 function WorkflowsView({ scope }: { scope: 'admin' | 'my' }) {
+  const entityTypes = useEntityTypes()
   const { user } = useAuth()
   const { data: users = [] } = useUsers()
   const [ownerFilter, setOwnerFilter] = useState('')
@@ -133,7 +141,7 @@ function WorkflowsView({ scope }: { scope: 'admin' | 'my' }) {
               >
                 <span className="font-medium">{d.name}</span>
                 <span className="text-xs text-slate-400">
-                  {entityLabel(d.entity_type)}
+                  {entityTypes.labelOf(d.entity_type)}
                   {scope === 'admin' && (
                     <span data-testid="definition-owner">
                       {' · '}
@@ -366,7 +374,8 @@ function DefinitionModal({ ownerId, onClose }: { ownerId: string; onClose: () =>
   const toast = useToast()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [entityType, setEntityType] = useState('generic')
+  const entityTypes = useEntityTypes()
+  const [entityType, setEntityType] = useState(entityTypes.options[0]?.code ?? 'generic')
 
   return (
     <Modal open onClose={onClose} title="New workflow" testid="definition-modal">
@@ -414,9 +423,9 @@ function DefinitionModal({ ownerId, onClose }: { ownerId: string; onClose: () =>
             value={entityType}
             onChange={(e) => setEntityType(e.target.value)}
           >
-            {WORKFLOW_ENTITY_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
+            {entityTypes.options.map((t) => (
+              <option key={t.code} value={t.code}>
+                {t.name}
               </option>
             ))}
           </Select>

@@ -1,3 +1,4 @@
+import { FALLBACK_ASSET_TYPES, useMasterOptions } from '@/lib/masterOptions'
 import { useMyAssets } from './hooks'
 import { useAuth } from '@/features/auth/auth-context'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -7,6 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 
 /** Employee view: every asset the company has assigned to you. */
 export function MyAssetsPage() {
+  const assetTypes = useMasterOptions('asset_types', FALLBACK_ASSET_TYPES)
   const { user } = useAuth()
   const { data: rows = [], isLoading } = useMyAssets(user?.id ?? null)
 
@@ -31,7 +33,7 @@ export function MyAssetsPage() {
             {rows.map((r) => (
               <tr key={r.id} data-testid="my-asset-row">
                 <Td className="font-medium text-slate-900">{r.asset?.name ?? '—'}</Td>
-                <Td>{r.asset?.asset_type ?? '—'}</Td>
+                <Td>{assetTypes.labelOf(r.asset?.asset_type)}</Td>
                 <Td className="font-mono text-xs">{r.asset?.serial || '—'}</Td>
                 <Td className="font-mono text-xs">{r.asset?.batch_no || '—'}</Td>
                 <Td>{new Date(r.assigned_at).toLocaleDateString()}</Td>

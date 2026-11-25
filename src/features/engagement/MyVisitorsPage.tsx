@@ -1,24 +1,26 @@
 import { useState } from 'react'
-import { IdCard, Plus } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { useMyVisitors, useRegisterVisitor } from './hooks'
 import { MeetingsSection } from './MeetingsSection'
 import { useAuth } from '@/features/auth/auth-context'
 import { useToast } from '@/components/ui/toast-context'
-import { generateLetterPdf } from '@/lib/pdfLetter'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card, CardBody } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
-import { Badge } from '@/components/ui/Badge'
 import { Input } from '@/components/ui/Input'
 import { Label } from '@/components/ui/Label'
 import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Select } from '@/components/ui/Select'
+import { FALLBACK_VISIT_PURPOSES, useMasterOptions } from '@/lib/masterOptions'
+import { PassCode, VisitorActions } from './VisitorActions'
 
 export function MyVisitorsPage() {
   const { user } = useAuth()
   const { data: visitors = [] } = useMyVisitors()
   const register = useRegisterVisitor()
   const toast = useToast()
+  const purposes = useMasterOptions('visit_purposes', FALLBACK_VISIT_PURPOSES)
 
   const [name, setName] = useState('')
   const [company, setCompany] = useState('')
@@ -39,7 +41,13 @@ export function MyVisitorsPage() {
             onSubmit={(e) => {
               e.preventDefault()
               register.mutate(
-                { name: name.trim(), company, purpose, hostId: user?.id ?? null, visitDate },
+                {
+                  name: name.trim(),
+                  company,
+                  purpose: purpose || purposes.options[0]?.code || '',
+                  hostId: user?.id ?? null,
+                  visitDate,
+                },
                 {
                   onSuccess: () => {
                     toast.success('Visitor registered')
@@ -62,7 +70,9 @@ export function MyVisitorsPage() {
             </div>
             <div>
               <Label className="text-xs">Purpose</Label>
-              <Input data-testid="my-visitor-purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} className="w-44" />
+              <Select data-testid="my-visitor-purpose" value={purpose || purposes.options[0]?.code || ''} onChange={(e) => setPurpose(e.target.value)} className="w-44">
+                {purposes.options.map((p) => (<option key={p.code} value={p.code}>{p.name}</option>))}
+              </Select>
             </div>
             <div>
               <Label className="text-xs">Visit date</Label>
@@ -85,7 +95,7 @@ export function MyVisitorsPage() {
               <Th>Purpose</Th>
               <Th>Date</Th>
               <Th>Pass code</Th>
-              <Th className="text-right">Pass</Th>
+              <Th className="text-right">Actions</Th>
             </tr>
           </Thead>
           <Tbody>
@@ -95,30 +105,17 @@ export function MyVisitorsPage() {
                   {v.name}
                   {v.company && <div className="text-xs font-normal text-slate-500">{v.company}</div>}
                 </Td>
-                <Td className="text-slate-600">{v.purpose || '—'}</Td>
+                <Td className="text-slate-600">{v.purpose ? purposes.labelOf(v.purpose) : '—'}</Td>
                 <Td>{v.visit_date}</Td>
                 <Td>
-                  <Badge tone="slate" data-testid="my-pass-code">
-                    {v.pass_code}
-                  </Badge>
+                  <PassCode code={v.pass_code} testid="my-pass-code" />
                 </Td>
                 <Td>
-                  <div className="flex justify-end">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      data-testid="my-generate-pass"
-                      onClick={() =>
-                        generateLetterPdf(`visitor-pass-${v.pass_code}`, 'Visitor Pass', [
-                          `Visitor: ${v.name}${v.company ? ` (${v.company})` : ''}`,
-                          `Date: ${v.visit_date}`,
-                          `Pass code: ${v.pass_code}`,
-                        ])
-                      }
-                    >
-                      <IdCard className="size-4" /> Pass
-                    </Button>
-                  </div>
+                  <VisitorActions
+                    visitor={v}
+                    purposeLabel={v.purpose ? purposes.labelOf(v.purpose) : undefined}
+                    testPrefix="my-"
+                  />
                 </Td>
               </tr>
             ))}

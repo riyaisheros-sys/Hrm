@@ -8,6 +8,26 @@ export type MasterKind =
   | 'policy_categories'
   | 'helpdesk_categories'
   | 'leave_types'
+  | 'recognition_awards'
+  | 'announcement_categories'
+  | 'visit_purposes'
+  | 'asset_types'
+  | 'workflow_entity_types'
+
+/** Masters whose rows also carry a stable `code` (what modules store). */
+const CODED: MasterKind[] = [
+  'document_types',
+  'recognition_awards',
+  'announcement_categories',
+  'visit_purposes',
+  'asset_types',
+  'workflow_entity_types',
+]
+
+// Every master shares one row shape (id, name, code?, is_active, sort_order).
+// The newer master tables are not in the generated types yet, so all masters
+// go through one typed handle.
+const masterTable = (kind: MasterKind) => supabase.from(kind as 'task_categories')
 
 export interface MasterItem {
   id: string
@@ -21,12 +41,10 @@ export function useMasterItems(kind: MasterKind) {
   return useQuery({
     queryKey: ['central-master', kind],
     queryFn: async () => {
-      const columns =
-        kind === 'document_types'
-          ? 'id,name,code,is_active,sort_order'
-          : 'id,name,is_active,sort_order'
-      const { data, error } = await supabase
-        .from(kind)
+      const columns = CODED.includes(kind)
+        ? 'id,name,code,is_active,sort_order'
+        : 'id,name,is_active,sort_order'
+      const { data, error } = await masterTable(kind)
         .select(columns)
         .order('sort_order')
         .order('name')
@@ -54,16 +72,17 @@ export function useSaveMasterItem(kind: MasterKind) {
         is_active: input.is_active ?? true,
         sort_order: input.sort_order ?? 0,
       }
-      if (kind === 'document_types') values.code = input.code || codeFor(input.name)
+      // Coded masters: the code is fixed once created (modules store it), so
+      // renaming an item keeps every existing record linked to it.
+      if (CODED.includes(kind) && !input.id) values.code = input.code || codeFor(input.name)
       // leave_types has a NOT NULL slug (unique) — generate from the name on
       // create so the simple CRUD widget doesn't need a dedicated input.
       if (kind === 'leave_types' && !input.id) values.slug = codeFor(input.name)
       const { error } = input.id
-        ? await supabase
-            .from(kind)
+        ? await masterTable(kind)
             .update(values as never)
             .eq('id', input.id)
-        : await supabase.from(kind).insert(values as never)
+        : await masterTable(kind).insert(values as never)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['central-master', kind] }),
@@ -74,7 +93,7 @@ export function useDeleteMasterItem(kind: MasterKind) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from(kind).delete().eq('id', id)
+      const { error } = await masterTable(kind).delete().eq('id', id)
       if (error) throw error
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['central-master', kind] }),
@@ -86,8 +105,7 @@ export function useReorderMasterItems(kind: MasterKind) {
   return useMutation({
     mutationFn: async (items: MasterItem[]) => {
       for (const [index, item] of items.entries()) {
-        const { error } = await supabase
-          .from(kind)
+        const { error } = await masterTable(kind)
           .update({ sort_order: index + 1 })
           .eq('id', item.id)
         if (error) throw error

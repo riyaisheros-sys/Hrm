@@ -1,3 +1,4 @@
+import { FALLBACK_ASSET_TYPES, useMasterOptions } from '@/lib/masterOptions'
 import { useMemo, useState } from 'react'
 import { Plus, Search, Trash2 } from 'lucide-react'
 import {
@@ -27,9 +28,9 @@ import { SortFilterTh } from '@/components/ui/SortFilterTh'
 import { useTableControls } from '@/lib/useTableControls'
 import { EmptyState } from '@/components/ui/EmptyState'
 
-const ASSET_TYPES = ['laptop', 'desktop', 'mobile', 'sim', 'id_card', 'headset', 'other']
 
 export function AssetsPage() {
+  const assetTypes = useMasterOptions('asset_types', FALLBACK_ASSET_TYPES)
   const { data: assets = [] } = useAssets()
   const { data: holders } = useActiveAssignments()
   const [createOpen, setCreateOpen] = useState(false)
@@ -45,7 +46,7 @@ export function AssetsPage() {
   }, [assets, search])
   const controls = useTableControls(visible, {
     name: (a) => a.name,
-    type: (a) => a.asset_type,
+    type: (a) => assetTypes.labelOf(a.asset_type),
     serial: (a) => a.serial,
     batch: (a) => a.batch_no,
     status: (a) => a.status,
@@ -97,7 +98,7 @@ export function AssetsPage() {
             {assetsPage.pagedItems.map((a) => (
               <tr key={a.id} data-testid="asset-row">
                 <Td className="font-medium text-slate-900">{a.name}</Td>
-                <Td>{a.asset_type}</Td>
+                <Td>{assetTypes.labelOf(a.asset_type)}</Td>
                 <Td className="font-mono text-xs" data-testid="asset-serial-cell">{a.serial || '—'}</Td>
                 <Td className="font-mono text-xs" data-testid="asset-batch-cell">{a.batch_no || '—'}</Td>
                 <Td>
@@ -133,7 +134,8 @@ export function AssetsPage() {
 function CreateAssetModal({ onClose }: { onClose: () => void }) {
   const create = useCreateAsset()
   const toast = useToast()
-  const [assetType, setAssetType] = useState('laptop')
+  const assetTypes = useMasterOptions('asset_types', FALLBACK_ASSET_TYPES)
+  const [assetType, setAssetType] = useState(assetTypes.options[0]?.code ?? 'laptop')
   const [name, setName] = useState('')
   const [serial, setSerial] = useState('')
   const [batchNo, setBatchNo] = useState('')
@@ -152,7 +154,7 @@ function CreateAssetModal({ onClose }: { onClose: () => void }) {
         <div>
           <Label htmlFor="as-type">Type</Label>
           <Select id="as-type" data-testid="asset-type" value={assetType} onChange={(e) => setAssetType(e.target.value)}>
-            {ASSET_TYPES.map((t) => (<option key={t} value={t}>{t}</option>))}
+            {assetTypes.options.map((t) => (<option key={t.code} value={t.code}>{t.name}</option>))}
           </Select>
         </div>
         <div>
@@ -186,6 +188,7 @@ function AssetModal({ asset, onClose }: { asset: Asset; onClose: () => void }) {
   const ret = useReturnAsset()
   const del = useDeleteAsset()
   const toast = useToast()
+  const assetTypes = useMasterOptions('asset_types', FALLBACK_ASSET_TYPES)
   const [employeeId, setEmployeeId] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -196,7 +199,7 @@ function AssetModal({ asset, onClose }: { asset: Asset; onClose: () => void }) {
     <Modal open onClose={onClose} title={asset.name} testid="asset-modal">
       <div className="space-y-4">
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-500">
-          <span>Type: <span className="font-medium text-slate-700">{asset.asset_type}</span></span>
+          <span>Type: <span className="font-medium text-slate-700">{assetTypes.labelOf(asset.asset_type)}</span></span>
           <span>Serial no: <span className="font-mono font-medium text-slate-700">{asset.serial || '—'}</span></span>
           <span>Batch no: <span className="font-mono font-medium text-slate-700">{asset.batch_no || '—'}</span></span>
         </div>

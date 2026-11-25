@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   Download,
   GripVertical,
@@ -70,9 +70,16 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   {
     kind: 'linked',
     module: 'People',
-    label: 'Employee Panel',
+    label: 'Employee Dashboard widgets',
     href: '/admin/employee-panel',
-    note: 'What employees see in entries & dashboard',
+    note: 'What shows on the employee dashboard',
+  },
+  {
+    kind: 'linked',
+    module: 'People',
+    label: 'Employee Entries (side panel)',
+    href: '/admin/employee-panel',
+    note: 'Which pages employees see in the side panel',
   },
   { kind: 'linked', module: 'People', label: 'Lifecycle', href: '/admin/lifecycle' },
 
@@ -167,6 +174,12 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   { kind: 'linked', module: 'Compensation', label: 'Salary policy', href: '/admin/salary' },
 
   // Workflow / Processes
+  {
+    kind: 'simple',
+    value: 'workflow_entity_types',
+    label: 'Workflow Entity Types',
+    module: 'Workflow',
+  },
   { kind: 'linked', module: 'Workflow', label: 'Workflow Definitions', href: '/admin/workflows' },
   {
     kind: 'linked',
@@ -183,6 +196,7 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   { kind: 'linked', module: 'Recruitment', label: 'Candidates', href: '/admin/recruitment' },
 
   // Assets
+  { kind: 'simple', value: 'asset_types', label: 'Asset Types', module: 'Assets' },
   {
     kind: 'linked',
     module: 'Assets',
@@ -192,8 +206,16 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   },
 
   // Engagement
+  { kind: 'simple', value: 'recognition_awards', label: 'Recognition Awards', module: 'Engagement' },
   { kind: 'linked', module: 'Engagement', label: 'Recognition', href: '/recognition' },
+  { kind: 'simple', value: 'visit_purposes', label: 'Visit / Meeting Purposes', module: 'Engagement' },
   { kind: 'linked', module: 'Engagement', label: 'Visitors & Meetings', href: '/admin/visitors' },
+  {
+    kind: 'simple',
+    value: 'announcement_categories',
+    label: 'Notice Board Categories',
+    module: 'Engagement',
+  },
   { kind: 'linked', module: 'Engagement', label: 'Notice Board', href: '/announcements' },
 
   // Reports & system
@@ -232,7 +254,12 @@ const MASTER_COLS = [
 ]
 
 export function MastersPage() {
-  const [kind, setKind] = useState<MasterKind>('task_categories')
+  // ?kind=recognition_awards opens that master directly (links from modules).
+  const [searchParams] = useSearchParams()
+  const [kind, setKind] = useState<MasterKind>(() => {
+    const asked = searchParams.get('kind')
+    return SIMPLE_KINDS.some((k) => k.value === asked) ? (asked as MasterKind) : 'task_categories'
+  })
   const [search, setSearch] = useState('')
   const [editing, setEditing] = useState<MasterItem | null>(null)
   const [name, setName] = useState('')

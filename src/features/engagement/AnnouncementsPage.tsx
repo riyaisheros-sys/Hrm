@@ -18,13 +18,18 @@ import { Label } from '@/components/ui/Label'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { useMasterOptions, type MasterOption } from '@/lib/masterOptions'
 
-const CATEGORIES = ['holiday', 'meeting', 'policy', 'birthday', 'news', 'alert']
+// Used only until the Notice Board Categories master exists on the database.
+const FALLBACK_CATEGORIES: MasterOption[] = ['news', 'holiday', 'meeting', 'policy', 'birthday', 'alert'].map(
+  (code) => ({ code, name: code[0].toUpperCase() + code.slice(1) }),
+)
 
 export function AnnouncementsPage() {
   const { hasPermission } = useProfile()
   const canManage = hasPermission('announcements.manage')
   const { data: items = [] } = useAnnouncements(canManage)
+  const categories = useMasterOptions('announcement_categories', FALLBACK_CATEGORIES)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Announcement | null>(null)
   const remove = useDeleteAnnouncement()
@@ -54,7 +59,7 @@ export function AnnouncementsPage() {
                 <div className="flex items-center gap-2">
                   <Megaphone className="text-brand-600 size-4" />
                   <h3 className="font-semibold text-slate-900">{a.title}</h3>
-                  <Badge tone="brand">{a.category}</Badge>
+                  <Badge tone="brand">{categories.labelOf(a.category)}</Badge>
                 </div>
                 <p className="mt-2 text-sm whitespace-pre-wrap text-slate-600">{a.body}</p>
                 <p className="mt-1 text-xs text-slate-400">
@@ -103,9 +108,12 @@ function PublishModal({
 }) {
   const publish = usePublishAnnouncement()
   const toast = useToast()
+  const categories = useMasterOptions('announcement_categories', FALLBACK_CATEGORIES)
   const [title, setTitle] = useState(announcement?.title ?? '')
   const [body, setBody] = useState(announcement?.body ?? '')
-  const [category, setCategory] = useState(announcement?.category ?? 'news')
+  const [category, setCategory] = useState(
+    announcement?.category ?? categories.options[0]?.code ?? 'news',
+  )
   const [startsAt, setStartsAt] = useState(
     (announcement?.starts_at ?? new Date().toISOString()).slice(0, 16),
   )
@@ -163,11 +171,14 @@ function PublishModal({
             value={category}
             onChange={(e) => setCategory(e.target.value)}
           >
-            {CATEGORIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            {categories.options.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
               </option>
             ))}
+            {announcement && !categories.options.some((c) => c.code === announcement.category) && (
+              <option value={announcement.category}>{categories.labelOf(announcement.category)}</option>
+            )}
           </Select>
         </div>
         <div>

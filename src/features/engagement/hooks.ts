@@ -103,6 +103,45 @@ export function useAwardRecognition() {
   })
 }
 
+export function useUpdateRecognition() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      employeeId: string
+      awardType: string
+      points: number
+      note?: string
+    }) => {
+      const { data, error } = await supabase
+        .from('recognitions')
+        .update({
+          employee_id: input.employeeId,
+          award_type: input.awardType,
+          points: input.points,
+          note: input.note || null,
+        })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this recognition')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['recognitions'] }),
+  })
+}
+
+export function useDeleteRecognition() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from('recognitions').delete().eq('id', id).select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this recognition')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['recognitions'] }),
+  })
+}
+
 export function useVisitors() {
   return useQuery({
     queryKey: ['visitors'],
@@ -132,6 +171,46 @@ export function useMyVisitors() {
       if (error) throw error
       return data
     },
+  })
+}
+
+function invalidateVisitors(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ['visitors'] })
+  qc.invalidateQueries({ queryKey: ['my-visitors'] })
+}
+
+export function useDeleteVisitor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase.from('visitors').delete().eq('id', id).select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this visitor')
+    },
+    onSuccess: () => invalidateVisitors(qc),
+  })
+}
+
+/** Remove (revoke) a visitor's pass code, or issue a fresh one. */
+export function useSetVisitorPass() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; issue: boolean }) => {
+      const code = input.issue ? crypto.randomUUID().replace(/-/g, '').slice(0, 8) : null
+      const { data, error } = await supabase
+        .from('visitors')
+        .update({ pass_code: code } as never)
+        .eq('id', input.id)
+        .select('id')
+      if (error) {
+        if (error.code === '23502')
+          throw new Error('Removing a pass needs the pending database update. Please try again after it is applied.')
+        throw error
+      }
+      if (!data?.length) throw new Error('Not allowed to change this pass')
+      return code
+    },
+    onSuccess: () => invalidateVisitors(qc),
   })
 }
 
