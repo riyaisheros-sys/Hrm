@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   useCreateEmployee,
@@ -34,6 +34,7 @@ import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
 import { ColumnChips } from '@/components/ui/ColumnChips'
 import { SortFilterTh } from '@/components/ui/SortFilterTh'
+import { FileInput } from '@/components/ui/FileInput'
 import { useTableControls } from '@/lib/useTableControls'
 import { PerformancePicker } from '@/features/performance/PerformancePicker'
 import {
@@ -747,7 +748,7 @@ function AddEmployeeModal({ onClose, allUsers }: { onClose: () => void; allUsers
   const [designationId, setDesignationId] = useState('')
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set())
   const updateProfile = useUpdateProfile()
-  const pictureRef = useRef<HTMLInputElement>(null)
+  const [pictureFiles, setPictureFiles] = useState<File[]>([])
   const quotaBaseline = (t: LeaveType) => Number(t.default_annual_quota)
 
   return (
@@ -775,7 +776,7 @@ function AddEmployeeModal({ onClose, allUsers }: { onClose: () => void; allUsers
             },
             {
               onSuccess: async (created) => {
-                const picture = pictureRef.current?.files?.[0]
+                const picture = pictureFiles[0]
                 if (picture) await uploadProfilePicture(created.userId, picture)
                 // Designation + KRA / KPI are written straight after creation.
                 try {
@@ -893,12 +894,13 @@ function AddEmployeeModal({ onClose, allUsers }: { onClose: () => void; allUsers
         </div>
         <div>
           <Label htmlFor="new-emp-picture">Profile picture</Label>
-          <input
-            ref={pictureRef}
+          <FileInput
             id="new-emp-picture"
-            type="file"
+            testid="new-emp-picture"
             accept="image/*"
-            className="block text-sm"
+            files={pictureFiles}
+            onChange={setPictureFiles}
+            hint="JPG or PNG"
           />
         </div>
         <div>

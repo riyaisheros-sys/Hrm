@@ -1,7 +1,9 @@
-import { useMemo, useRef, useState } from 'react'
-import { Download, History, Pencil, Plus, Settings2, Trash2, Upload } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Download, Eye, FileText, History, Pencil, Plus, Settings2, Trash2, Upload } from 'lucide-react'
 import {
+  downloadDocument,
   getDocumentUrl,
+  useUpdateDocument,
   useDeleteDocument,
   useAllEmployeeDocuments,
   useDeleteDocumentType,
@@ -33,6 +35,9 @@ import { Table, Tbody, Td, Th, Thead } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/lib/usePagination'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { FileInput } from '@/components/ui/FileInput'
+import { usePeople } from '@/lib/people'
+import { formatDateTime } from '@/lib/format'
 
 const ITEM_STATUS: OnboardingItem['status'][] = ['pending', 'submitted', 'verified']
 
@@ -45,9 +50,20 @@ export function DocumentsPage() {
   const upload = useUploadDocument()
   const del = useDeleteDocument()
   const toast = useToast()
-  const fileRef = useRef<HTMLInputElement>(null)
-  const [docType, setDocType] = useState('pan')
+  const [files, setFiles] = useState<File[]>([])
+  const [pickedType, setPickedType] = useState('')
+  const docType = pickedType || documentTypes[0]?.code || ''
+  const setDocType = setPickedType
   const [title, setTitle] = useState('')
+  const [editingDoc, setEditingDoc] = useState<EmployeeDocument | null>(null)
+  const { data: people = [] } = usePeople()
+  const typeName = (code: string) =>
+    documentTypes.find((t) => t.code === code)?.name ??
+    code.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase())
+  const personName = (id: string | null) =>
+    (id && (people.find((p) => p.id === id)?.full_name || people.find((p) => p.id === id)?.email)) ||
+    '—'
+  const employee = users.find((u) => u.id === effectiveUser)
   const [deleting, setDeleting] = useState<EmployeeDocument | null>(null)
   const [historyType, setHistoryType] = useState<string | null>(null)
   const [manageTypes, setManageTypes] = useState(false)
@@ -67,15 +83,20 @@ export function DocumentsPage() {
       <PageHeader
         title="Doc Vault"
         description="Versioned, access-controlled document repository and the joining checklist."
+        actions={
+          <Button type="button" variant="outline" onClick={() => setManageTypes(true)}>
+            <Settings2 className="size-4" /> Manage types
+          </Button>
+        }
       />
 
       <Card className="mb-4">
         <CardBody>
           <form
-            className="flex flex-wrap items-end gap-3"
+            className="grid items-end gap-3 md:grid-cols-2 xl:grid-cols-[12rem_12rem_minmax(10rem,1fr)_minmax(16rem,1.4fr)_auto]"
             onSubmit={(e) => {
               e.preventDefault()
-              const file = fileRef.current?.files?.[0]
+              const file = files[0]
               if (!file) {
                 toast.error('Choose a file first')
                 return
@@ -86,7 +107,7 @@ export function DocumentsPage() {
                   onSuccess: () => {
                     toast.success('Document uploaded')
                     setTitle('')
-                    if (fileRef.current) fileRef.current.value = ''
+                    setFiles([])
                   },
                   onError: (err) => toast.error('Upload failed', (err as Error).message),
                 },
@@ -100,7 +121,6 @@ export function DocumentsPage() {
                 data-testid="doc-employee-select"
                 value={effectiveUser}
                 onChange={(e) => setEmployeeId(e.target.value)}
-                className="w-48"
               >
                 {users.map((u) => (
                   <option key={u.id} value={u.id}>
@@ -116,7 +136,6 @@ export function DocumentsPage() {
                 data-testid="doc-type-select"
                 value={docType}
                 onChange={(e) => setDocType(e.target.value)}
-                className="w-44"
               >
                 {documentTypes.map((type) => (
                   <option key={type.id} value={type.code}>
@@ -132,24 +151,15 @@ export function DocumentsPage() {
                 data-testid="doc-title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-44"
+                placeholder="Defaults to the file name"
               />
             </div>
             <div>
               <Label htmlFor="doc-file">File</Label>
-              <input
-                ref={fileRef}
-                id="doc-file"
-                data-testid="doc-file"
-                type="file"
-                className="block text-sm"
-              />
+              <FileInput id="doc-file" testid="doc-file" files={files} onChange={setFiles} />
             </div>
             <Button type="submit" data-testid="upload-document" loading={upload.isPending}>
               <Upload className="size-4" /> Upload
-            </Button>
-            <Button type="button" variant="outline" onClick={() => setManageTypes(true)}>
-              <Settings2 className="size-4" /> Manage types
             </Button>
           </form>
         </CardBody>
@@ -157,6 +167,15 @@ export function DocumentsPage() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_360px]">
         <div>
+          <div className="mb-2 flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold text-slate-800" data-testid="docs-heading">
+              {employee?.full_name || employee?.email || 'Employee'}'s documents
+            </h2>
+            <span className="text-xs text-slate-500">
+              {latestDocuments.length} document{latestDocuments.length === 1 ? '' : 's'} ·{' '}
+              {docs.length} file{docs.length === 1 ? '' : 's'} incl. older versions
+            </span>
+          </div>
           {docs.length === 0 ? (
             <EmptyState title="No documents for this employee" testid="docs-empty" />
           ) : (
@@ -166,52 +185,90 @@ export function DocumentsPage() {
                   <Th>Category</Th>
                   <Th>Title</Th>
                   <Th>Version</Th>
-                  <Th className="text-right">File</Th>
+                  <Th>Uploaded</Th>
+                  <Th className="text-right">Actions</Th>
                 </tr>
               </Thead>
               <Tbody>
-                {latestPage.pagedItems.map((d) => (
-                  <tr key={d.id} data-testid="document-row">
-                    <Td>
-                      <Badge tone="slate" data-testid="doc-category">
-                        {d.doc_type}
-                      </Badge>
-                    </Td>
-                    <Td className="font-medium text-slate-900">{d.title}</Td>
-                    <Td data-testid="doc-version">v{d.version}</Td>
-                    <Td>
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          data-testid="download-document"
-                          className="text-brand-600 hover:text-brand-700 inline-flex items-center gap-1 text-sm"
-                          onClick={async () => {
-                            const url = await getDocumentUrl(d.id, d.storage_path)
-                            if (url) window.open(url, '_blank')
-                            else toast.error('Could not open document')
-                          }}
-                        >
-                          <Download className="size-4" /> Open
-                        </button>
-                        {docs.filter((document) => document.doc_type === d.doc_type).length > 1 && (
-                          <button
-                            className="hover:text-brand-700 inline-flex items-center gap-1 text-sm text-slate-600"
-                            onClick={() => setHistoryType(d.doc_type)}
-                          >
-                            <History className="size-4" /> History
-                          </button>
+                {latestPage.pagedItems.map((d) => {
+                  const versions = docs.filter((document) => document.doc_type === d.doc_type).length
+                  return (
+                    <tr key={d.id} data-testid="document-row">
+                      <Td>
+                        <Badge tone="brand" data-testid="doc-category">
+                          {typeName(d.doc_type)}
+                        </Badge>
+                      </Td>
+                      <Td className="max-w-72">
+                        <span className="flex items-center gap-2 font-medium text-slate-900">
+                          <FileText className="size-4 shrink-0 text-slate-400" />
+                          <span className="truncate" title={d.title}>
+                            {d.title}
+                          </span>
+                        </span>
+                      </Td>
+                      <Td data-testid="doc-version" className="whitespace-nowrap">
+                        v{d.version}
+                        {versions > 1 && (
+                          <span className="ml-1 text-xs text-slate-400">({versions} versions)</span>
                         )}
-                        <button
-                          data-testid="delete-document"
-                          aria-label={`Delete ${d.title}`}
-                          className="rounded p-1 text-slate-400 hover:text-red-600"
-                          onClick={() => setDeleting(d)}
-                        >
-                          <Trash2 className="size-4" />
-                        </button>
-                      </div>
-                    </Td>
-                  </tr>
-                ))}
+                      </Td>
+                      <Td className="text-xs whitespace-nowrap text-slate-500">
+                        {formatDateTime(d.created_at)}
+                        <div>by {personName(d.uploaded_by)}</div>
+                      </Td>
+                      <Td>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            data-testid="download-document"
+                            className="text-brand-600 hover:bg-brand-50 inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium"
+                            onClick={async () => {
+                              const url = await getDocumentUrl(d.id, d.storage_path)
+                              if (url) window.open(url, '_blank')
+                              else toast.error('Could not open document')
+                            }}
+                          >
+                            <Eye className="size-3.5" /> View
+                          </button>
+                          <button
+                            data-testid="save-document"
+                            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                            onClick={async () => {
+                              const ok = await downloadDocument(d)
+                              if (!ok) toast.error('Could not download document')
+                            }}
+                          >
+                            <Download className="size-3.5" /> Download
+                          </button>
+                          {versions > 1 && (
+                            <button
+                              className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+                              onClick={() => setHistoryType(d.doc_type)}
+                            >
+                              <History className="size-3.5" /> History
+                            </button>
+                          )}
+                          <button
+                            data-testid="edit-document"
+                            aria-label={`Edit ${d.title}`}
+                            className="hover:text-brand-600 rounded p-1 text-slate-400"
+                            onClick={() => setEditingDoc(d)}
+                          >
+                            <Pencil className="size-4" />
+                          </button>
+                          <button
+                            data-testid="delete-document"
+                            aria-label={`Delete ${d.title}`}
+                            className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                            onClick={() => setDeleting(d)}
+                          >
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                      </Td>
+                    </tr>
+                  )
+                })}
               </Tbody>
             </Table>
           )}
@@ -281,8 +338,11 @@ export function DocumentsPage() {
                 key={document.id}
                 className="flex items-center justify-between rounded-lg border border-slate-200 p-3 text-sm"
               >
-                <span>
+                <span className="min-w-0">
                   <strong>v{document.version}</strong> · {document.title}
+                  <span className="block text-xs text-slate-500">
+                    {formatDateTime(document.created_at)} · by {personName(document.uploaded_by)}
+                  </span>
                 </span>
                 <Button
                   size="sm"
@@ -302,7 +362,87 @@ export function DocumentsPage() {
         </Modal>
       )}
       {manageTypes && <DocumentTypesModal onClose={() => setManageTypes(false)} />}
+      {editingDoc && (
+        <EditDocumentModal
+          doc={editingDoc}
+          types={documentTypes}
+          onClose={() => setEditingDoc(null)}
+        />
+      )}
     </div>
+  )
+}
+
+function EditDocumentModal({
+  doc,
+  types,
+  onClose,
+}: {
+  doc: EmployeeDocument
+  types: DocumentType[]
+  onClose: () => void
+}) {
+  const update = useUpdateDocument()
+  const toast = useToast()
+  const [title, setTitle] = useState(doc.title)
+  const [docType, setDocType] = useState(doc.doc_type)
+  return (
+    <Modal open onClose={onClose} title="Edit document" testid="edit-document-modal">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          update.mutate(
+            { id: doc.id, title, docType },
+            {
+              onSuccess: () => {
+                toast.success('Document updated')
+                onClose()
+              },
+              onError: (err) => toast.error('Could not update', (err as Error).message),
+            },
+          )
+        }}
+      >
+        <div>
+          <Label htmlFor="edit-doc-title">Title</Label>
+          <Input
+            id="edit-doc-title"
+            data-testid="edit-doc-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="edit-doc-type">Category</Label>
+          <Select
+            id="edit-doc-type"
+            data-testid="edit-doc-type"
+            value={docType}
+            onChange={(e) => setDocType(e.target.value)}
+          >
+            {types.map((t) => (
+              <option key={t.id} value={t.code}>
+                {t.name}
+              </option>
+            ))}
+            {!types.some((t) => t.code === doc.doc_type) && (
+              <option value={doc.doc_type}>{doc.doc_type}</option>
+            )}
+          </Select>
+        </div>
+        <p className="text-xs text-slate-500">The file itself stays the same; upload again for a new version.</p>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" data-testid="save-document-edit" loading={update.isPending}>
+            Save
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 

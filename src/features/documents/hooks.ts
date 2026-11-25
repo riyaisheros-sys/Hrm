@@ -145,6 +145,40 @@ export function useDeleteDocument() {
   })
 }
 
+/** Rename a document or move it to another category (documents edit right). */
+export function useUpdateDocument() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; title: string; docType: string }) => {
+      if (!input.title.trim()) throw new Error('Title is required')
+      const { data, error } = await supabase
+        .from('employee_documents')
+        .update({ title: input.title.trim(), doc_type: input.docType })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this document')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['emp-documents'] }),
+  })
+}
+
+/** Save a document to the computer under its title (logged like Open). */
+export async function downloadDocument(doc: { id: string; storage_path: string; title: string }) {
+  const url = await getDocumentUrl(doc.id, doc.storage_path)
+  if (!url) return false
+  const blob = await fetch(url).then((r) => (r.ok ? r.blob() : null))
+  if (!blob) return false
+  const ext = doc.storage_path.includes('.') ? doc.storage_path.slice(doc.storage_path.lastIndexOf('.')) : ''
+  const name = doc.title.toLowerCase().endsWith(ext.toLowerCase()) ? doc.title : `${doc.title}${ext}`
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(a.href)
+  return true
+}
+
 export async function getDocumentUrl(id: string, path: string): Promise<string | null> {
   const logged = await supabase.rpc('log_document_download', { p_document: id })
   if (logged.error) return null

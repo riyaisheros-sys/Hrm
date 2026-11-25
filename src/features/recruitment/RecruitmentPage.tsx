@@ -27,6 +27,7 @@ import {
 import { useProfile } from '@/features/rbac/profile-context'
 import { useActivePeople, usePeople } from '@/lib/people'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
+import { FileInput } from '@/components/ui/FileInput'
 import { Textarea } from '@/components/ui/Textarea'
 import { formatDate } from '@/lib/format'
 import { useDepartments } from '@/features/admin/hierarchy/hooks'
@@ -928,16 +929,13 @@ function CandidateModal({
         {!candidate && (
           <div>
             <Label htmlFor="cd-files">Attachments (resume, documents)</Label>
-            <Input
+            <FileInput
               id="cd-files"
-              data-testid="candidate-files"
-              type="file"
+              testid="candidate-files"
               multiple
-              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+              files={files}
+              onChange={setFiles}
             />
-            {files.length > 0 && (
-              <p className="mt-1 text-xs text-slate-500">{files.map((f) => f.name).join(', ')}</p>
-            )}
           </div>
         )}
         <div className="flex justify-end gap-2">
