@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { CalendarPlus, Check, ExternalLink, Trash2, X } from 'lucide-react'
+import { CalendarPlus, Check, ExternalLink, Pencil, Trash2, X } from 'lucide-react'
 import {
   useCreateMeeting,
   useDeleteMeeting,
   useDirectory,
   useMeetings,
   useRespondToInvite,
+  useUpdateMeeting,
   type MeetingRow,
 } from './hooks'
 import { useAuth } from '@/features/auth/auth-context'
@@ -38,11 +39,13 @@ export function MeetingsSection() {
   const del = useDeleteMeeting()
   const toast = useToast()
   const { hasPermission } = useProfile()
-  // Admins (visitors.manage) may delete any meeting; hosts their own.
+  // Admins (visitors.manage) may edit / delete any meeting; hosts their own.
   const canManage = hasPermission('visitors.manage')
   const [hostModal, setHostModal] = useState(false)
   const [deleting, setDeleting] = useState<MeetingRow | null>(null)
   const askDelete = (id: string) => setDeleting(meetings.find((m) => m.id === id) ?? null)
+  const [editing, setEditing] = useState<MeetingRow | null>(null)
+  const askEdit = (id: string) => setEditing(meetings.find((m) => m.id === id) ?? null)
 
   const nameById = useMemo(
     () => new Map(directory.map((d) => [d.id, d.full_name || d.email])),
@@ -89,6 +92,7 @@ export function MeetingsSection() {
                   }
                   canManage={canManage}
                   onDelete={askDelete}
+                  onEdit={askEdit}
                 />
               ))}
             </div>
@@ -113,6 +117,7 @@ export function MeetingsSection() {
                     }
                     canManage={canManage}
                     onDelete={askDelete}
+                    onEdit={askEdit}
                   />
                 ))}
               </div>
@@ -122,6 +127,7 @@ export function MeetingsSection() {
       )}
 
       {hostModal && <HostMeetingModal onClose={() => setHostModal(false)} />}
+      {editing && <EditMeetingModal meeting={editing} onClose={() => setEditing(null)} />}
       {deleting && (
         <ConfirmDialog
           title="Delete meeting"
@@ -157,6 +163,7 @@ function MeetingCard({
   nameById,
   onRespond,
   onDelete,
+  onEdit,
   canManage = false,
 }: {
   canManage?: boolean
@@ -168,6 +175,7 @@ function MeetingCard({
     status: 'invited' | 'accepted' | 'rejected' | 'attended',
   ) => void
   onDelete?: (meetingId: string) => void
+  onEdit?: (meetingId: string) => void
 }) {
   const myInvite = meeting.meeting_invitees.find((i) => i.user_id === meId)
   const isHost = meeting.host_id === meId
@@ -184,15 +192,31 @@ function MeetingCard({
               Hosted by {isHost ? 'you' : (nameById.get(meeting.host_id) ?? '—')}
             </p>
           </div>
-          {(isHost || canManage) && onDelete && (
-            <button
-              data-testid="delete-meeting"
-              aria-label={`Delete meeting ${meeting.title}`}
-              className="text-slate-400 hover:text-red-600"
-              onClick={() => onDelete(meeting.id)}
-            >
-              <Trash2 className="size-4" />
-            </button>
+          {(isHost || canManage) && (onEdit || onDelete) && (
+            <div className="flex shrink-0 gap-1">
+              {onEdit && (
+                <button
+                  type="button"
+                  data-testid="edit-meeting"
+                  aria-label={`Edit meeting ${meeting.title}`}
+                  className="hover:text-brand-600 rounded p-1 text-slate-400"
+                  onClick={() => onEdit(meeting.id)}
+                >
+                  <Pencil className="size-4" />
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  data-testid="delete-meeting"
+                  aria-label={`Delete meeting ${meeting.title}`}
+                  className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                  onClick={() => onDelete(meeting.id)}
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              )}
+            </div>
           )}
         </div>
         <p className="text-sm text-slate-600">
@@ -394,6 +418,119 @@ function HostMeetingModal({ onClose }: { onClose: () => void }) {
           </Button>
           <Button type="submit" data-testid="create-meeting-submit" loading={create.isPending}>
             Create meeting
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+/** ISO timestamp → the local "YYYY-MM-DDTHH:mm" a datetime-local input expects. */
+function toLocalInput(iso: string | null) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function EditMeetingModal({ meeting, onClose }: { meeting: MeetingRow; onClose: () => void }) {
+  const update = useUpdateMeeting()
+  const toast = useToast()
+  const [title, setTitle] = useState(meeting.title)
+  const [description, setDescription] = useState(meeting.description ?? '')
+  const [link, setLink] = useState(meeting.meeting_link ?? '')
+  const [startsAt, setStartsAt] = useState(toLocalInput(meeting.starts_at))
+  const [endsAt, setEndsAt] = useState(toLocalInput(meeting.ends_at))
+
+  return (
+    <Modal open onClose={onClose} title="Edit meeting" testid="edit-meeting-modal">
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (endsAt && new Date(endsAt) < new Date(startsAt)) {
+            toast.error('The meeting must end after it starts')
+            return
+          }
+          update.mutate(
+            {
+              id: meeting.id,
+              title: title.trim(),
+              description: description.trim() || undefined,
+              link: link.trim() || undefined,
+              startsAt: new Date(startsAt).toISOString(),
+              endsAt: endsAt ? new Date(endsAt).toISOString() : undefined,
+            },
+            {
+              onSuccess: () => {
+                toast.success('Meeting updated')
+                onClose()
+              },
+              onError: (err) => toast.error('Save failed', (err as Error).message),
+            },
+          )
+        }}
+      >
+        <div>
+          <Label htmlFor="mt-edit-title">Title</Label>
+          <Input
+            id="mt-edit-title"
+            data-testid="meeting-edit-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="mt-edit-desc">Description</Label>
+          <Textarea
+            id="mt-edit-desc"
+            data-testid="meeting-edit-desc"
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label htmlFor="mt-edit-link">Meeting link</Label>
+          <Input
+            id="mt-edit-link"
+            data-testid="meeting-edit-link"
+            type="url"
+            placeholder="https://meet.example.com/…"
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="mt-edit-start">Starts</Label>
+            <Input
+              id="mt-edit-start"
+              data-testid="meeting-edit-start"
+              type="datetime-local"
+              value={startsAt}
+              onChange={(e) => setStartsAt(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="mt-edit-end">Ends (optional)</Label>
+            <Input
+              id="mt-edit-end"
+              data-testid="meeting-edit-end"
+              type="datetime-local"
+              value={endsAt}
+              onChange={(e) => setEndsAt(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" data-testid="save-meeting" loading={update.isPending}>
+            Save
           </Button>
         </div>
       </form>

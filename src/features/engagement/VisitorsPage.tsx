@@ -124,6 +124,7 @@ export function VisitorsPage() {
                     visitor={v}
                     hostName={v.host_id ? nameById.get(v.host_id) : undefined}
                     purposeLabel={v.purpose ? purposes.labelOf(v.purpose) : undefined}
+                    allowHostChange
                   />
                 </Td>
               </tr>

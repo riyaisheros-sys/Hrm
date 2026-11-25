@@ -239,12 +239,32 @@ export function useCreateHoliday() {
   })
 }
 
+export function useUpdateHoliday() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; name: string; date: string }) => {
+      const { data, error } = await supabase
+        .from('holidays')
+        .update({ name: input.name, holiday_date: input.date })
+        .eq('id', input.id)
+        .select('id')
+      if (error) {
+        if (error.code === '23505') throw new Error('There is already a holiday on this date')
+        throw error
+      }
+      if (!data?.length) throw new Error('Not allowed to edit this holiday')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['holidays'] }),
+  })
+}
+
 export function useDeleteHoliday() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('holidays').delete().eq('id', id)
+      const { data, error } = await supabase.from('holidays').delete().eq('id', id).select('id')
       if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this holiday')
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['holidays'] }),
   })

@@ -191,6 +191,37 @@ export function useDeleteVisitor() {
   })
 }
 
+export function useUpdateVisitor() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      name: string
+      company?: string
+      purpose?: string
+      /** Omit to keep the current host (employees can't reassign). */
+      hostId?: string | null
+      visitDate: string
+    }) => {
+      const values: Partial<Visitor> = {
+        name: input.name,
+        company: input.company || null,
+        purpose: input.purpose || null,
+        visit_date: input.visitDate,
+      }
+      if (input.hostId !== undefined) values.host_id = input.hostId
+      const { data, error } = await supabase
+        .from('visitors')
+        .update(values)
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this visitor')
+    },
+    onSuccess: () => invalidateVisitors(qc),
+  })
+}
+
 /** Remove (revoke) a visitor's pass code, or issue a fresh one. */
 export function useSetVisitorPass() {
   const qc = useQueryClient()
@@ -338,6 +369,35 @@ export function useRespondToInvite() {
         .update({ status: input.status, responded_at: new Date().toISOString() })
         .eq('id', input.inviteeRowId)
       if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['meetings'] }),
+  })
+}
+
+export function useUpdateMeeting() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      title: string
+      description?: string
+      link?: string
+      startsAt: string
+      endsAt?: string
+    }) => {
+      const { data, error } = await supabase
+        .from('meetings')
+        .update({
+          title: input.title,
+          description: input.description || null,
+          meeting_link: input.link || null,
+          starts_at: input.startsAt,
+          ends_at: input.endsAt || null,
+        })
+        .eq('id', input.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this meeting')
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['meetings'] }),
   })

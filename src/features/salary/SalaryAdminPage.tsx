@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { Calculator, FileText, Plus, Settings2, Trash2 } from 'lucide-react'
+import { Calculator, FileText, Pencil, Plus, Settings2, Trash2 } from 'lucide-react'
 import {
   parseComponents,
   useAddAdjustment,
   useAdjustments,
   useComputeFnf,
+  useDeleteAdjustment,
+  useDeletePayslipTemplate,
+  useUpdateAdjustment,
   useComputeSalary,
   useSalaryProfile,
   useSalaryRun,
@@ -12,6 +15,8 @@ import {
   useSavePayslipTemplate,
   useUpsertSalaryProfile,
   type FnfSettlement,
+  type PayslipTemplate,
+  type SalaryAdjustment,
   type SalaryComponent,
   type SalaryRun,
 } from './hooks'
@@ -31,6 +36,7 @@ import { Select } from '@/components/ui/Select'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { Textarea } from '@/components/ui/Textarea'
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 
 function currentMonth() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' })
@@ -46,7 +52,10 @@ export function SalaryAdminPage() {
   const [month, setMonth] = useState(currentMonth())
   const { data: payslipTemplates = [] } = usePayslipTemplates()
   const [templateId, setTemplateId] = useState('')
-  const [templateModal, setTemplateModal] = useState(false)
+  // 'new' creates a template; a template row edits that template.
+  const [templateModal, setTemplateModal] = useState<PayslipTemplate | 'new' | null>(null)
+  const [deletingTemplate, setDeletingTemplate] = useState<PayslipTemplate | null>(null)
+  const deleteTemplate = useDeletePayslipTemplate()
   const selectedTemplate =
     payslipTemplates.find((template) => template.id === templateId) ??
     payslipTemplates.find((template) => template.is_default) ??
@@ -129,8 +138,41 @@ export function SalaryAdminPage() {
             ))}
           </Select>
         </div>
+        {canManage && selectedTemplate && (
+          <div className="flex items-center gap-1 self-center pt-5">
+            <button
+              type="button"
+              data-testid="edit-payslip-template"
+              aria-label={`Edit template ${selectedTemplate.name}`}
+              title="Edit this template"
+              className="hover:text-brand-600 rounded-md p-1.5 text-slate-400"
+              onClick={() => setTemplateModal(selectedTemplate)}
+            >
+              <Pencil className="size-4" />
+            </button>
+            <button
+              type="button"
+              data-testid="delete-payslip-template"
+              aria-label={`Delete template ${selectedTemplate.name}`}
+              title={
+                payslipTemplates.length <= 1
+                  ? 'The last template cannot be deleted'
+                  : 'Delete this template'
+              }
+              disabled={payslipTemplates.length <= 1}
+              className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+              onClick={() => setDeletingTemplate(selectedTemplate)}
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+        )}
         {canManage && (
-          <Button variant="outline" onClick={() => setTemplateModal(true)}>
+          <Button
+            variant="outline"
+            data-testid="new-payslip-template"
+            onClick={() => setTemplateModal('new')}
+          >
             <Settings2 className="size-4" /> Customize format
           </Button>
         )}
@@ -229,35 +271,83 @@ export function SalaryAdminPage() {
       </div>
 
       <FnfSection canManage={canManage} />
-      {templateModal && <PayslipTemplateModal onClose={() => setTemplateModal(false)} />}
+      {templateModal && (
+        <PayslipTemplateModal
+          existing={templateModal === 'new' ? null : templateModal}
+          onClose={() => setTemplateModal(null)}
+        />
+      )}
+      {deletingTemplate && (
+        <ConfirmDialog
+          title="Delete payslip template"
+          testid="delete-payslip-template-dialog"
+          confirmLabel="Delete template"
+          loading={deleteTemplate.isPending}
+          onClose={() => setDeletingTemplate(null)}
+          message={
+            <p>
+              Delete the payslip template{' '}
+              <span className="font-semibold text-slate-900">{deletingTemplate.name}</span>?
+              {deletingTemplate.is_default && ' Another template becomes the default.'} This cannot
+              be undone.
+            </p>
+          }
+          onConfirm={() =>
+            deleteTemplate.mutate(deletingTemplate.id, {
+              onSuccess: () => {
+                toast.success('Payslip template deleted')
+                if (templateId === deletingTemplate.id) setTemplateId('')
+                setDeletingTemplate(null)
+              },
+              onError: (error) => toast.error('Delete failed', (error as Error).message),
+            })
+          }
+        />
+      )}
     </div>
   )
 }
 
-function PayslipTemplateModal({ onClose }: { onClose: () => void }) {
+function PayslipTemplateModal({
+  existing,
+  onClose,
+}: {
+  existing: PayslipTemplate | null
+  onClose: () => void
+}) {
   const save = useSavePayslipTemplate()
   const toast = useToast()
-  const [name, setName] = useState('')
-  const [letterhead, setLetterhead] = useState('')
-  const [logoUrl, setLogoUrl] = useState('')
-  const [footer, setFooter] = useState('')
+  const [name, setName] = useState(existing?.name ?? '')
+  const [letterhead, setLetterhead] = useState(existing?.letterhead ?? '')
+  const [logoUrl, setLogoUrl] = useState(existing?.logo_url ?? '')
+  const [footer, setFooter] = useState(existing?.footer ?? '')
   const [body, setBody] = useState(
-    'Pay period: {{month}}\nGross: {{gross}}\nNet: {{net}}\nEarnings: {{earnings}}\nDeductions: {{deductions}}',
+    existing?.body_template ??
+      'Pay period: {{month}}\nGross: {{gross}}\nNet: {{net}}\nEarnings: {{earnings}}\nDeductions: {{deductions}}',
   )
+  // New templates become the default (as before). The current default stays
+  // default — pick another template as default to change it.
+  const [isDefault, setIsDefault] = useState(existing ? existing.is_default : true)
   return (
-    <Modal open onClose={onClose} title="New payslip template">
+    <Modal
+      open
+      onClose={onClose}
+      title={existing ? 'Edit payslip template' : 'New payslip template'}
+      testid="payslip-template-modal"
+    >
       <form
         className="space-y-3"
         onSubmit={(event) => {
           event.preventDefault()
           save.mutate(
             {
+              id: existing?.id,
               name,
               letterhead,
               logo_url: logoUrl || null,
               body_template: body,
               footer: footer || null,
-              is_default: true,
+              is_default: isDefault,
             },
             {
               onSuccess: () => {
@@ -271,7 +361,12 @@ function PayslipTemplateModal({ onClose }: { onClose: () => void }) {
       >
         <div>
           <Label>Template name</Label>
-          <Input value={name} onChange={(event) => setName(event.target.value)} required />
+          <Input
+            data-testid="payslip-template-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            required
+          />
         </div>
         <div>
           <Label>Letterhead / company name</Label>
@@ -299,11 +394,21 @@ function PayslipTemplateModal({ onClose }: { onClose: () => void }) {
           <Label>Footer</Label>
           <Input value={footer} onChange={(event) => setFooter(event.target.value)} />
         </div>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            data-testid="payslip-template-default"
+            checked={isDefault}
+            disabled={!!existing?.is_default}
+            onChange={(event) => setIsDefault(event.target.checked)}
+          />
+          Use as the default template
+        </label>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" loading={save.isPending}>
+          <Button type="submit" data-testid="save-payslip-template" loading={save.isPending}>
             Save template
           </Button>
         </div>
@@ -426,7 +531,7 @@ interface BaseSalaryCardProps {
   userId: string
   month: string
   canManage: boolean
-  adjustments: Array<{ id: string; kind: string; amount: number }>
+  adjustments: SalaryAdjustment[]
   /** Salary or an adjustment changed — the payslip needs recalculating. */
   onChanged: () => void
 }
@@ -597,18 +702,7 @@ function SalaryBreakdownEditor({
         </Button>
 
         <AdjustmentForm userId={userId} month={month} onChanged={onChanged} />
-        <ul className="space-y-1 text-sm">
-          {adjustments.map((a) => (
-            <li key={a.id} className="flex justify-between">
-              <Badge
-                tone={a.kind === 'penalty' ? 'red' : a.kind === 'incentive' ? 'green' : 'blue'}
-              >
-                {a.kind}
-              </Badge>
-              <span>{rupees(a.amount)}</span>
-            </li>
-          ))}
-        </ul>
+        <AdjustmentList adjustments={adjustments} canManage={canManage} onChanged={onChanged} />
       </CardBody>
     </Card>
   )
@@ -672,5 +766,179 @@ function AdjustmentForm({
         <Plus className="size-4" />
       </Button>
     </form>
+  )
+}
+
+type AdjustmentKind = 'incentive' | 'penalty' | 'increment'
+
+/** This month's incentives / penalties / increments, each editable and deletable. */
+function AdjustmentList({
+  adjustments,
+  canManage,
+  onChanged,
+}: {
+  adjustments: SalaryAdjustment[]
+  canManage: boolean
+  onChanged: () => void
+}) {
+  const remove = useDeleteAdjustment()
+  const toast = useToast()
+  const [editing, setEditing] = useState<SalaryAdjustment | null>(null)
+  const [deleting, setDeleting] = useState<SalaryAdjustment | null>(null)
+
+  return (
+    <>
+      <ul className="space-y-1 text-sm" data-testid="adjustment-list">
+        {adjustments.map((a) => (
+          <li key={a.id} className="flex items-center justify-between gap-2" data-testid="adjustment-row">
+            <Badge tone={a.kind === 'penalty' ? 'red' : a.kind === 'incentive' ? 'green' : 'blue'}>
+              {a.kind}
+            </Badge>
+            {a.note && <span className="min-w-0 flex-1 truncate text-xs text-slate-500">{a.note}</span>}
+            <span className="ml-auto flex items-center gap-1">
+              <span data-testid="adjustment-amount">{rupees(a.amount)}</span>
+              {canManage && (
+                <>
+                  <button
+                    type="button"
+                    data-testid="edit-adjustment"
+                    aria-label={`Edit ${a.kind} of ${rupees(a.amount)}`}
+                    className="hover:text-brand-600 rounded p-1 text-slate-400"
+                    onClick={() => setEditing(a)}
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="delete-adjustment"
+                    aria-label={`Delete ${a.kind} of ${rupees(a.amount)}`}
+                    className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    onClick={() => setDeleting(a)}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+
+      {editing && (
+        <AdjustmentEditModal
+          adjustment={editing}
+          onClose={() => setEditing(null)}
+          onChanged={onChanged}
+        />
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title="Delete adjustment"
+          testid="delete-adjustment-dialog"
+          confirmLabel="Delete"
+          loading={remove.isPending}
+          onClose={() => setDeleting(null)}
+          message={
+            <p>
+              Delete the {deleting.kind} of{' '}
+              <span className="font-semibold text-slate-900">{rupees(deleting.amount)}</span>? The
+              payslip is recalculated without it.
+            </p>
+          }
+          onConfirm={() =>
+            remove.mutate(deleting.id, {
+              onSuccess: () => {
+                toast.success('Adjustment deleted')
+                setDeleting(null)
+                onChanged()
+              },
+              onError: (err) => toast.error('Delete failed', (err as Error).message),
+            })
+          }
+        />
+      )}
+    </>
+  )
+}
+
+function AdjustmentEditModal({
+  adjustment,
+  onClose,
+  onChanged,
+}: {
+  adjustment: SalaryAdjustment
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const update = useUpdateAdjustment()
+  const toast = useToast()
+  const [kind, setKind] = useState<AdjustmentKind>(adjustment.kind as AdjustmentKind)
+  const [amount, setAmount] = useState(String(adjustment.amount))
+  const [note, setNote] = useState(adjustment.note ?? '')
+
+  return (
+    <Modal open onClose={onClose} title="Edit adjustment" testid="adjustment-edit-modal">
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault()
+          update.mutate(
+            { id: adjustment.id, kind, amount: Number(amount), note: note.trim() },
+            {
+              onSuccess: () => {
+                toast.success('Adjustment updated', 'The payslip is recalculated with it.')
+                onClose()
+                onChanged()
+              },
+              onError: (err) => toast.error('Save failed', (err as Error).message),
+            },
+          )
+        }}
+      >
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label htmlFor="adj-edit-kind">Type</Label>
+            <Select
+              id="adj-edit-kind"
+              data-testid="adj-edit-kind"
+              value={kind}
+              onChange={(e) => setKind(e.target.value as AdjustmentKind)}
+            >
+              <option value="incentive">Incentive</option>
+              <option value="penalty">Penalty</option>
+              <option value="increment">Increment</option>
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="adj-edit-amount">Amount (₹)</Label>
+            <Input
+              id="adj-edit-amount"
+              data-testid="adj-edit-amount"
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+            />
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="adj-edit-note">Note</Label>
+          <Input
+            id="adj-edit-note"
+            data-testid="adj-edit-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" data-testid="save-adjustment" loading={update.isPending}>
+            Save
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }

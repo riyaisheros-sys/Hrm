@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, MessageSquarePlus, Plus, Trash2, X } from 'lucide-react'
+import { Check, MessageSquarePlus, Pencil, Plus, Trash2, X } from 'lucide-react'
 import {
   DURATION_LABEL,
   type LeaveDuration,
@@ -11,6 +11,8 @@ import {
   useLeaveRealtime,
   usePendingApprovals,
   useSetLeaveRemark,
+  useUpdateHoliday,
+  type Holiday,
   type LeaveRequestRow,
 } from './hooks'
 import { todayInTz } from '@/features/attendance/geo'
@@ -328,6 +330,8 @@ function HolidaySection() {
   const toast = useToast()
   const [name, setName] = useState('')
   const [date, setDate] = useState('')
+  const [editing, setEditing] = useState<Holiday | null>(null)
+  const [deleting, setDeleting] = useState<Holiday | null>(null)
 
   return (
     <section className="mt-10" data-testid="holidays-section">
@@ -369,18 +373,115 @@ function HolidaySection() {
               <Td>{h.holiday_date}</Td>
               <Td className="font-medium text-slate-900">{h.name}</Td>
               <Td>
-                <button
-                  aria-label={`Delete ${h.name}`}
-                  className="text-slate-400 hover:text-red-600"
-                  onClick={() => del.mutate(h.id, { onError: (e) => toast.error('Delete failed', (e as Error).message) })}
-                >
-                  <Trash2 className="size-4" />
-                </button>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    data-testid="edit-holiday"
+                    aria-label={`Edit ${h.name}`}
+                    className="hover:text-brand-600 rounded-md p-1 text-slate-400"
+                    onClick={() => setEditing(h)}
+                  >
+                    <Pencil className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="delete-holiday"
+                    aria-label={`Delete ${h.name}`}
+                    className="rounded-md p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    onClick={() => setDeleting(h)}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
               </Td>
             </tr>
           ))}
         </Tbody>
       </Table>
+
+      {editing && <HolidayEditModal holiday={editing} onClose={() => setEditing(null)} />}
+      {deleting && (
+        <ConfirmDialog
+          title="Delete holiday"
+          testid="delete-holiday-dialog"
+          confirmLabel="Delete"
+          loading={del.isPending}
+          onClose={() => setDeleting(null)}
+          message={
+            <p>
+              Delete <span className="font-semibold text-slate-900">{deleting.name}</span> (
+              {deleting.holiday_date}) from the holiday calendar? This cannot be undone.
+            </p>
+          }
+          onConfirm={() =>
+            del.mutate(deleting.id, {
+              onSuccess: () => {
+                toast.success('Holiday deleted')
+                setDeleting(null)
+              },
+              onError: (e) => toast.error('Delete failed', (e as Error).message),
+            })
+          }
+        />
+      )}
     </section>
+  )
+}
+
+function HolidayEditModal({ holiday, onClose }: { holiday: Holiday; onClose: () => void }) {
+  const update = useUpdateHoliday()
+  const toast = useToast()
+  const [name, setName] = useState(holiday.name)
+  const [date, setDate] = useState(holiday.holiday_date)
+
+  return (
+    <Modal open onClose={onClose} title="Edit holiday" testid="holiday-edit-modal">
+      <form
+        className="space-y-4"
+        onSubmit={(e) => {
+          e.preventDefault()
+          update.mutate(
+            { id: holiday.id, name: name.trim(), date },
+            {
+              onSuccess: () => {
+                toast.success('Holiday updated')
+                onClose()
+              },
+              onError: (err) => toast.error('Save failed', (err as Error).message),
+            },
+          )
+        }}
+      >
+        <div>
+          <Label htmlFor="holiday-edit-name">Name</Label>
+          <Input
+            id="holiday-edit-name"
+            data-testid="holiday-edit-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="holiday-edit-date">Date</Label>
+          <Input
+            id="holiday-edit-date"
+            data-testid="holiday-edit-date"
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            required
+          />
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" data-testid="save-holiday" loading={update.isPending}>
+            Save
+          </Button>
+        </div>
+      </form>
+    </Modal>
   )
 }

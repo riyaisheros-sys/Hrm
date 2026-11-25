@@ -29,10 +29,46 @@ export function useSavePayslipTemplate() {
           .from('payslip_templates')
           .update({ is_default: false })
           .neq('id', id ?? '')
-      const { error } = id
-        ? await supabase.from('payslip_templates').update(values).eq('id', id)
-        : await supabase.from('payslip_templates').insert(values)
+      const { data, error } = id
+        ? await supabase.from('payslip_templates').update(values).eq('id', id).select('id')
+        : await supabase.from('payslip_templates').insert(values).select('id')
+      if (error) {
+        if (error.code === '23505') throw new Error('A template with this name already exists')
+        throw error
+      }
+      if (!data?.length) throw new Error('Not allowed to save this template')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['payslip-templates'] }),
+  })
+}
+
+/** Delete a payslip template. The last one is kept so payslips always have a format. */
+export function useDeletePayslipTemplate() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { count, error: countError } = await supabase
+        .from('payslip_templates')
+        .select('id', { count: 'exact', head: true })
+      if (countError) throw countError
+      if ((count ?? 0) <= 1) throw new Error('Keep at least one payslip template')
+      const { data, error } = await supabase
+        .from('payslip_templates')
+        .delete()
+        .eq('id', id)
+        .select('id, is_default')
       if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this template')
+      // The default went away: promote another template so one stays default.
+      if (data[0].is_default) {
+        const { data: next } = await supabase
+          .from('payslip_templates')
+          .select('id')
+          .order('name')
+          .limit(1)
+        if (next?.[0])
+          await supabase.from('payslip_templates').update({ is_default: true }).eq('id', next[0].id)
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['payslip-templates'] }),
   })
@@ -162,6 +198,43 @@ export function useAddAdjustment() {
         note: args.note || null,
       })
       if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['salary-adjustments'] }),
+  })
+}
+
+export function useUpdateAdjustment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (args: {
+      id: string
+      kind: 'incentive' | 'penalty' | 'increment'
+      amount: number
+      note?: string
+    }) => {
+      const { data, error } = await supabase
+        .from('salary_adjustments')
+        .update({ kind: args.kind, amount: args.amount, note: args.note || null })
+        .eq('id', args.id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to edit this adjustment')
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['salary-adjustments'] }),
+  })
+}
+
+export function useDeleteAdjustment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data, error } = await supabase
+        .from('salary_adjustments')
+        .delete()
+        .eq('id', id)
+        .select('id')
+      if (error) throw error
+      if (!data?.length) throw new Error('Not allowed to delete this adjustment')
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['salary-adjustments'] }),
   })
