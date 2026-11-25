@@ -37,6 +37,7 @@ export const SIDEBAR_GROUP_FOR: Record<string, Record<string, string>> = {
     'nav-onboarding':        'entries',
     'nav-lifecycle':         'entries',
     'nav-salary-admin':      'entries',
+    'nav-expenses':          'entries',
     'nav-appraisal-admin':   'entries',
     'nav-kra-kpi':           'entries',
     'nav-documents':         'entries',
@@ -69,6 +70,7 @@ export const SIDEBAR_GROUP_FOR: Record<string, Record<string, string>> = {
     'nav-helpdesk':       'entries',
     'nav-visitors-self':  'entries',
     'nav-training-self':  'entries',
+    'nav-expenses-self':  'entries',
     // Reports — view-only surfaces for the employee
     'nav-salary':         'reports',
     'nav-appraisal':      'reports',

@@ -24,6 +24,7 @@ import {
   Milestone,
   Monitor,
   Network,
+  Receipt,
   Package,
   Plane,
   ScrollText,
@@ -200,6 +201,13 @@ const adminNav: NavItem[] = [
     perm: 'monitoring.view',
   },
   { to: '/admin/users', label: 'Users', icon: Users, testid: 'nav-users', perm: 'users.view' },
+  {
+    to: '/expenses',
+    label: 'Office Expenses',
+    icon: Receipt,
+    testid: 'nav-expenses',
+    perm: 'expenses.view',
+  },
   { to: '/admin/roles', label: 'Organization Roles', icon: Shield, testid: 'nav-roles', perm: 'roles.view' },
   {
     to: '/admin/hierarchy',
@@ -267,6 +275,13 @@ export const employeeNav: NavItem[] = [
   { to: '/visitors', label: 'Visitors & Meetings', icon: IdCard, testid: 'nav-visitors-self' },
   { to: '/training', label: 'My Training', icon: GraduationCap, testid: 'nav-training-self' },
   { to: '/monitoring', label: 'Monitoring', icon: Monitor, testid: 'nav-monitoring-self' },
+  {
+    to: '/expenses',
+    label: 'Office Expenses',
+    icon: Receipt,
+    testid: 'nav-expenses-self',
+    perm: 'expenses.add',
+  },
 ]
 
 export function AppShell({ children }: { children: ReactNode }) {

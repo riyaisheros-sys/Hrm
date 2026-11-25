@@ -9,6 +9,7 @@ export type ModuleMaster =
   | 'visit_purposes'
   | 'asset_types'
   | 'workflow_entity_types'
+  | 'expense_categories'
 
 export interface MasterOption {
   code: string

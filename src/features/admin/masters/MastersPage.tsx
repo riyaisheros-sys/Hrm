@@ -173,6 +173,10 @@ const KINDS: Array<SimpleMaster | LinkedMaster> = [
   { kind: 'linked', module: 'Compensation', label: 'Payslip Templates', href: '/admin/salary' },
   { kind: 'linked', module: 'Compensation', label: 'Salary policy', href: '/admin/salary' },
 
+  // Finance
+  { kind: 'simple', value: 'expense_categories', label: 'Expense Categories', module: 'Finance' },
+  { kind: 'linked', module: 'Finance', label: 'Office Expenses', href: '/expenses' },
+
   // Workflow / Processes
   {
     kind: 'simple',

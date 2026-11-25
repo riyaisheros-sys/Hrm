@@ -43,6 +43,7 @@ import { EmployeePanelPage } from '@/features/admin/employee-panel/EmployeePanel
 import { KraKpiMasterPage } from '@/features/performance/KraKpiMasterPage'
 import { AttendanceSettingsPage } from '@/features/attendance/AttendanceSettingsPage'
 import { OrgStructurePage } from '@/features/admin/hierarchy/OrgStructurePage'
+import { OfficeExpensesPage } from '@/features/expenses/OfficeExpensesPage'
 
 export function App() {
   return (
@@ -148,6 +149,14 @@ export function App() {
         />
         <Route path="/policies" element={<PolicyPage />} />
         <Route path="/org-structure" element={<OrgStructurePage />} />
+        <Route
+          path="/expenses"
+          element={
+            <RequirePermission perm={['expenses.view', 'expenses.add', 'expenses.manage']}>
+              <OfficeExpensesPage />
+            </RequirePermission>
+          }
+        />
         <Route path="/helpdesk" element={<HelpdeskPage />} />
         <Route path="/announcements" element={<AnnouncementsPage />} />
         <Route path="/visitors" element={<MyVisitorsPage />} />

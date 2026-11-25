@@ -13,6 +13,7 @@ export type MasterKind =
   | 'visit_purposes'
   | 'asset_types'
   | 'workflow_entity_types'
+  | 'expense_categories'
 
 /** Masters whose rows also carry a stable `code` (what modules store). */
 const CODED: MasterKind[] = [
@@ -22,6 +23,7 @@ const CODED: MasterKind[] = [
   'visit_purposes',
   'asset_types',
   'workflow_entity_types',
+  'expense_categories',
 ]
 
 // Every master shares one row shape (id, name, code?, is_active, sort_order).
