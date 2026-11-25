@@ -1,3 +1,4 @@
+import { MASKED, SalaryPasswordModal, useSalaryVisible } from '@/features/salary/salaryLock'
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
@@ -62,6 +63,7 @@ function Stat({
   icon: Icon,
   tone = 'brand',
   to,
+  onClick,
 }: {
   label: string
   value: string | number
@@ -69,6 +71,8 @@ function Stat({
   icon: typeof ListChecks
   tone?: 'brand' | 'green' | 'amber' | 'red' | 'blue'
   to?: string
+  /** Used instead of `to` when the tile opens something in place. */
+  onClick?: () => void
 }) {
   const toneCls: Record<string, string> = {
     brand: 'bg-brand-50 text-brand-600',
@@ -90,8 +94,16 @@ function Stat({
     </CardBody>
   )
   return (
-    <Card className={to ? 'transition-shadow hover:shadow-md' : undefined}>
-      {to ? <Link to={to}>{body}</Link> : body}
+    <Card className={to || onClick ? 'transition-shadow hover:shadow-md' : undefined}>
+      {onClick ? (
+        <button type="button" className="block w-full text-left" onClick={onClick}>
+          {body}
+        </button>
+      ) : to ? (
+        <Link to={to}>{body}</Link>
+      ) : (
+        body
+      )}
     </Card>
   )
 }
@@ -119,6 +131,9 @@ function useMyPendingPolicyCount(policyIds: string[], myAcks: Set<string> | unde
 
 export function EmployeeDashboard() {
   const [customizing, setCustomizing] = useState(false)
+  // Salary stays hidden until the employee re-enters their password.
+  const salary = useSalaryVisible()
+  const [askPassword, setAskPassword] = useState(false)
   const toast = useToast()
   const { preferences, save } = useDashboardPreferences(
     'employee',
@@ -325,11 +340,24 @@ export function EmployeeDashboard() {
     'my-salary': (
       <Stat
         label="Latest salary slip"
-        value={lastSalary ? `₹${Number(lastSalary.net ?? 0).toLocaleString('en-IN')}` : '—'}
-        sub={lastSalary ? String(lastSalary.period_month).slice(0, 7) : 'Not yet available'}
+        value={
+          !lastSalary
+            ? '—'
+            : salary.visible
+              ? `₹${Math.round(Number(lastSalary.net ?? 0)).toLocaleString('en-IN')}`
+              : MASKED
+        }
+        sub={
+          !lastSalary
+            ? 'Not yet available'
+            : salary.visible
+              ? String(lastSalary.period_month).slice(0, 7)
+              : `${String(lastSalary.period_month).slice(0, 7)} · click and enter password to view`
+        }
         icon={Wallet}
         tone="green"
-        to="/salary"
+        to={salary.visible || !lastSalary ? '/salary' : undefined}
+        onClick={lastSalary && !salary.visible ? () => setAskPassword(true) : undefined}
       />
     ),
     'my-appraisal': (
@@ -426,6 +454,7 @@ export function EmployeeDashboard() {
 
   return (
     <div data-testid="employee-dashboard">
+      {askPassword && <SalaryPasswordModal onClose={() => setAskPassword(false)} />}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">

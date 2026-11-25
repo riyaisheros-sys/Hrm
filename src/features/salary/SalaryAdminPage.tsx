@@ -17,6 +17,7 @@ import {
 } from './hooks'
 import { SalaryCalculation, SundayHolidaySwitch } from './SalaryCalculation'
 import { rupees } from './money'
+import { downloadPayslip } from './payslipPdf'
 import { generateLetterPdf } from '@/lib/pdfLetter'
 import { useUsers } from '@/features/admin/users/hooks'
 import { useProfile } from '@/features/rbac/profile-context'
@@ -205,22 +206,17 @@ export function SalaryAdminPage() {
                     variant="outline"
                     data-testid="download-payslip"
                     onClick={() => {
-                      const earnings = `base ${rupees(run.base_earned)}, overtime ${rupees(run.overtime_pay)}, incentives ${rupees(run.incentives)}, increments ${rupees(run.increments)}`
-                      const deductions = `penalties ${rupees(run.penalties)}, PF ${rupees(run.pf)}, ESIC ${rupees(run.esic)}, professional tax ${rupees(run.professional_tax)}, TDS ${rupees(run.tds)}`
-                      const body = (
-                        selectedTemplate?.body_template ||
-                        'Pay period: {{month}}\nGross: {{gross}}\nNet: {{net}}\nEarnings: {{earnings}}\nDeductions: {{deductions}}'
+                      const person = users.find((u) => u.id === effectiveUser)
+                      void downloadPayslip({
+                        run,
+                        employee: {
+                          name: person?.full_name || person?.email || 'Employee',
+                          code: person?.employee_code,
+                        },
+                        template: selectedTemplate,
+                      }).catch((err) =>
+                        toast.error('Could not create the slip', (err as Error).message),
                       )
-                        .replaceAll('{{month}}', month)
-                        .replaceAll('{{gross}}', rupees(run.gross))
-                        .replaceAll('{{net}}', rupees(run.net))
-                        .replaceAll('{{earnings}}', earnings)
-                        .replaceAll('{{deductions}}', deductions)
-                      void generateLetterPdf(`payslip-${month}`, 'Salary Slip', body.split('\n'), {
-                        letterhead: selectedTemplate?.letterhead,
-                        logoUrl: selectedTemplate?.logo_url,
-                        footer: selectedTemplate?.footer,
-                      })
                     }}
                   >
                     <FileText className="size-4" /> Download payslip
