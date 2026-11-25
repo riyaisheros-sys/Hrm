@@ -80,10 +80,16 @@ export function TasksPage() {
   useTasksRealtime()
   const { data: tasks = [], isLoading } = useTasks()
   const { data: statuses = [] } = useTaskStatuses()
+  const { data: taskGroups = [] } = useTaskCategories()
   const [filter, setFilter] = useState<'mine' | 'all'>(canViewAll ? 'all' : 'mine')
   const [assignorFilter, setAssignorFilter] = useState('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
+  const [groupFilter, setGroupFilter] = useState('')
+  const [priorityFilter, setPriorityFilter] = useState('')
+  const [search, setSearch] = useState('')
+  // Quick views from the summary cards.
+  const [quick, setQuick] = useState<'' | 'overdue' | 'due_today'>('')
   const [newOpen, setNewOpen] = useState(false)
   const [statusTask, setStatusTask] = useState<TaskRow | null>(null)
   const [editTask, setEditTask] = useState<TaskRow | null>(null)
@@ -118,24 +124,71 @@ export function TasksPage() {
     return { assignors: sorted(by), assignees: sorted(to) }
   }, [inView])
 
+  const needle = search.trim().toLowerCase()
   const scoped = useMemo(
     () =>
       inView.filter(
         (t) =>
           (!assignorFilter || t.created_by === assignorFilter) &&
-          (!assigneeFilter || t.assignee_id === assigneeFilter),
+          (!assigneeFilter || t.assignee_id === assigneeFilter) &&
+          (!groupFilter ||
+            (groupFilter === '__none' ? !t.category_id : t.category_id === groupFilter)) &&
+          (!priorityFilter || t.priority === priorityFilter) &&
+          (!needle ||
+            t.title.toLowerCase().includes(needle) ||
+            (t.description ?? '').toLowerCase().includes(needle)),
       ),
-    [inView, assignorFilter, assigneeFilter],
+    [inView, assignorFilter, assigneeFilter, groupFilter, priorityFilter, needle],
   )
+
+  // Summary cards: counts over the current scope (filters except status).
+  const summary = useMemo(() => {
+    let open = 0
+    let overdue = 0
+    let dueToday = 0
+    let done = 0
+    for (const t of scoped) {
+      if (t.status?.is_terminal) {
+        done++
+        continue
+      }
+      open++
+      const state = getTaskDelay(t.due_date, t.completed_at).state
+      if (state === 'overdue') overdue++
+      else if (state === 'due_today') dueToday++
+    }
+    return { open, overdue, dueToday, done }
+  }, [scoped])
 
   const completedCount = useMemo(() => scoped.filter((t) => t.status?.is_terminal).length, [scoped])
   // Picking a specific status shows exactly that status (completed included);
   // otherwise the "Show completed" toggle decides.
   const visible = useMemo(() => {
+    if (quick)
+      return scoped.filter(
+        (t) => !t.status?.is_terminal && getTaskDelay(t.due_date, t.completed_at).state === quick,
+      )
     if (statusFilter) return scoped.filter((t) => t.status_id === statusFilter)
     return showCompleted ? scoped : scoped.filter((t) => !t.status?.is_terminal)
-  }, [scoped, showCompleted, statusFilter])
-  const hasFilters = !!(assignorFilter || assigneeFilter || statusFilter)
+  }, [scoped, showCompleted, statusFilter, quick])
+  const hasFilters = !!(
+    assignorFilter ||
+    assigneeFilter ||
+    statusFilter ||
+    groupFilter ||
+    priorityFilter ||
+    needle ||
+    quick
+  )
+  function clearFilters() {
+    setAssignorFilter('')
+    setAssigneeFilter('')
+    setStatusFilter('')
+    setGroupFilter('')
+    setPriorityFilter('')
+    setSearch('')
+    setQuick('')
+  }
 
   // Bulk-assign rows (one task per assignee, shared bulk_key) collapse into a
   // single parent row in "All tasks" so the list doesn't repeat the same title
@@ -152,6 +205,7 @@ export function TasksPage() {
     priority: (t) => ({ low: 1, medium: 2, high: 3 })[t.priority as 'low' | 'medium' | 'high'] ?? 0,
     progress: (t) => t.progress_percent,
     status: (t) => styleForStatus(t.status?.slug).label,
+    due: (t) => t.due_date,
   })
   const tableTasks = controls.rows
   const displayItems = useMemo<DisplayItem[]>(() => {
@@ -185,7 +239,7 @@ export function TasksPage() {
   const pagination = usePagination(
     displayItems,
     25,
-    `${filter}|${assignorFilter}|${assigneeFilter}|${statusFilter}|${showCompleted}|${controls.stateKey}`,
+    `${filter}|${assignorFilter}|${assigneeFilter}|${statusFilter}|${groupFilter}|${priorityFilter}|${needle}|${quick}|${showCompleted}|${controls.stateKey}`,
   )
   const { pagedItems, pageStart } = pagination
 
@@ -202,23 +256,39 @@ export function TasksPage() {
         </Td>
         <Td
           className={cn(
-            'sticky left-10 z-10 bg-white font-medium text-slate-900',
+            'sticky left-10 z-10 w-80 max-w-80 min-w-64 bg-white font-medium whitespace-normal text-slate-900',
             isChild && 'bg-slate-50 pl-10',
           )}
         >
-          {t.title}
-          {t.due_date && (
-            <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs font-normal">
+          <div>{t.title}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-normal">
+            {t.category?.name && (
               <span
-                data-testid="task-due-date"
-                data-delay={getTaskDelay(t.due_date, t.completed_at).state}
-                className={dueDateClass(getTaskDelay(t.due_date, t.completed_at).state)}
+                data-testid="task-group"
+                className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-1.5 py-0.5 text-violet-700"
               >
-                due {formatDate(t.due_date)}
+                <FolderOpen className="size-3" /> {t.category.name}
               </span>
-              <TaskDelayBadge dueDate={t.due_date} completedAt={t.completed_at} />
-            </div>
-          )}
+            )}
+            <Badge
+              tone={PRIORITY_TONE[t.priority as keyof typeof PRIORITY_TONE]}
+              data-testid="task-priority"
+            >
+              {t.priority}
+            </Badge>
+            {t.due_date && (
+              <>
+                <span
+                  data-testid="task-due-date"
+                  data-delay={getTaskDelay(t.due_date, t.completed_at).state}
+                  className={dueDateClass(getTaskDelay(t.due_date, t.completed_at).state)}
+                >
+                  due {formatDate(t.due_date)}
+                </span>
+                <TaskDelayBadge dueDate={t.due_date} completedAt={t.completed_at} />
+              </>
+            )}
+          </div>
           {t.remarks && !isChild && (
             <div
               data-testid="task-remark"
@@ -229,24 +299,23 @@ export function TasksPage() {
             </div>
           )}
         </Td>
-        <Td data-testid="task-assignee">
-          {t.assignee?.full_name || t.assignee?.email || 'Unassigned'}
-        </Td>
-        <Td className="text-slate-500">{t.creator?.full_name || t.creator?.email}</Td>
-        <Td data-testid="task-created-at" className="whitespace-nowrap text-slate-500">
-          {formatDate(t.created_at)}
-        </Td>
-        <Td data-testid="task-completed-at" className="whitespace-nowrap text-slate-500">
-          {formatDate(t.completed_at) || '—'}
-        </Td>
         <Td>
-          <Badge tone={PRIORITY_TONE[t.priority as keyof typeof PRIORITY_TONE]}>
-            {t.priority}
-          </Badge>
+          <div data-testid="task-assignee">
+            <PersonChip name={t.assignee?.full_name || t.assignee?.email || 'Unassigned'} />
+          </div>
+          <div className="mt-1 pl-8 text-xs whitespace-nowrap text-slate-500" data-testid="task-creator">
+            by {t.creator?.full_name || t.creator?.email || '—'}
+          </div>
+        </Td>
+        <Td className="whitespace-nowrap text-xs text-slate-500">
+          <div data-testid="task-created-at">Created {formatDate(t.created_at)}</div>
+          <div data-testid="task-completed-at" className={t.completed_at ? 'text-emerald-700' : ''}>
+            {t.completed_at ? `Done ${formatDate(t.completed_at)}` : 'Not completed'}
+          </div>
         </Td>
         <Td>
           <div className="flex items-center gap-2" data-testid="task-progress">
-            <div className="h-1.5 w-16 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-1.5 w-12 overflow-hidden rounded-full bg-slate-100">
               <div
                 className="bg-brand-500 h-full rounded-full"
                 style={{ width: `${t.progress_percent}%` }}
@@ -270,7 +339,7 @@ export function TasksPage() {
             isChild && 'bg-slate-50',
           )}
         >
-          <div className="flex justify-end gap-1">
+          <div className="flex w-36 flex-wrap items-center justify-end gap-1">
             <LifecycleActions task={t} userId={user!.id} canApproveAny={canManageStatuses} />
             <button
               data-testid="update-status-button"
@@ -391,16 +460,77 @@ export function TasksPage() {
         </button>
         <ApprovalsSummary tasks={visible} userId={user?.id} />
         {user?.id && <CapacityCallout userId={user.id} />}
-        <div className="flex items-center gap-2">
-          <Label htmlFor="task-status-filter" className="mb-0 text-xs text-slate-500">
+      </div>
+
+      <TaskSummaryCards
+        summary={summary}
+        quick={quick}
+        onQuick={(q) => {
+          setQuick(q)
+          setStatusFilter('')
+        }}
+        onShowCompleted={() => {
+          setQuick('')
+          setStatusFilter('')
+          setShowCompleted(true)
+        }}
+        onShowOpen={() => {
+          setQuick('')
+          setStatusFilter('')
+          setShowCompleted(false)
+        }}
+      />
+
+      <div
+        className="mb-4 grid gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7"
+        data-testid="task-filter-bar"
+      >
+        <div className="sm:col-span-2 lg:col-span-1 xl:col-span-2">
+          <Label htmlFor="task-search" className="text-xs text-slate-500">
+            Search
+          </Label>
+          <Input
+            id="task-search"
+            data-testid="task-search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Task title or description"
+            className="h-9"
+          />
+        </div>
+        <div>
+          <Label htmlFor="task-group-filter" className="text-xs text-slate-500">
+            Task group
+          </Label>
+          <Select
+            id="task-group-filter"
+            data-testid="task-group-filter"
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
+            className="h-9"
+          >
+            <option value="">All groups</option>
+            {taskGroups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+            <option value="__none">No group</option>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="task-status-filter" className="text-xs text-slate-500">
             Status
           </Label>
           <Select
             id="task-status-filter"
             data-testid="task-status-filter"
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 w-40"
+            onChange={(e) => {
+              setStatusFilter(e.target.value)
+              setQuick('')
+            }}
+            className="h-9"
           >
             <option value="">All statuses</option>
             {statuses.map((s) => (
@@ -410,8 +540,25 @@ export function TasksPage() {
             ))}
           </Select>
         </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="task-assignor-filter" className="mb-0 text-xs text-slate-500">
+        <div>
+          <Label htmlFor="task-priority-filter" className="text-xs text-slate-500">
+            Priority
+          </Label>
+          <Select
+            id="task-priority-filter"
+            data-testid="task-priority-filter"
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="h-9"
+          >
+            <option value="">All priorities</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="task-assignor-filter" className="text-xs text-slate-500">
             Assigned by
           </Label>
           <Select
@@ -419,7 +566,7 @@ export function TasksPage() {
             data-testid="task-assignor-filter"
             value={assignorFilter}
             onChange={(e) => setAssignorFilter(e.target.value)}
-            className="h-9 w-44"
+            className="h-9"
           >
             <option value="">Anyone</option>
             {assignors.map(([id, label]) => (
@@ -429,8 +576,8 @@ export function TasksPage() {
             ))}
           </Select>
         </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="task-assignee-filter" className="mb-0 text-xs text-slate-500">
+        <div>
+          <Label htmlFor="task-assignee-filter" className="text-xs text-slate-500">
             Assigned to
           </Label>
           <Select
@@ -438,7 +585,7 @@ export function TasksPage() {
             data-testid="task-assignee-filter"
             value={assigneeFilter}
             onChange={(e) => setAssigneeFilter(e.target.value)}
-            className="h-9 w-44"
+            className="h-9"
           >
             <option value="">Anyone</option>
             {assignees.map(([id, label]) => (
@@ -449,17 +596,15 @@ export function TasksPage() {
           </Select>
         </div>
         {hasFilters && (
-          <button
-            data-testid="clear-task-filters"
-            className="text-brand-600 text-xs font-medium hover:underline"
-            onClick={() => {
-              setAssignorFilter('')
-              setAssigneeFilter('')
-              setStatusFilter('')
-            }}
-          >
-            Clear filters
-          </button>
+          <div className="flex items-end sm:col-span-2 lg:col-span-4 xl:col-span-7">
+            <button
+              data-testid="clear-task-filters"
+              className="text-brand-600 text-xs font-medium hover:underline"
+              onClick={clearFilters}
+            >
+              Clear all filters
+            </button>
+          </div>
         )}
       </div>
 
@@ -489,11 +634,8 @@ export function TasksPage() {
               <SortFilterTh controls={controls} k="title" className="left-10 z-20">
                 Task
               </SortFilterTh>
-              <SortFilterTh controls={controls} k="assignee">Assignee</SortFilterTh>
-              <SortFilterTh controls={controls} k="creator">Created by</SortFilterTh>
-              <SortFilterTh controls={controls} k="created" filterable={false}>Created</SortFilterTh>
-              <SortFilterTh controls={controls} k="completed" filterable={false}>Completed</SortFilterTh>
-              <SortFilterTh controls={controls} k="priority" filterable={false}>Priority</SortFilterTh>
+              <SortFilterTh controls={controls} k="assignee">Assigned to / by</SortFilterTh>
+              <SortFilterTh controls={controls} k="created" filterable={false}>Dates</SortFilterTh>
               <SortFilterTh controls={controls} k="progress" filterable={false}>Progress</SortFilterTh>
               <SortFilterTh controls={controls} k="status">Status</SortFilterTh>
               <Th className="sticky right-0 z-20 w-px bg-slate-50 shadow-[-4px_0_6px_-4px_rgba(0,0,0,0.08)]" />
@@ -544,6 +686,16 @@ export function TasksPage() {
                         <UsersIcon className="size-3" /> {total} people
                       </Badge>
                     </button>
+                    <div className="mt-1 ml-6 flex flex-wrap items-center gap-1.5 text-xs font-normal">
+                      {first.category?.name && (
+                        <span className="inline-flex items-center gap-1 rounded-md bg-violet-50 px-1.5 py-0.5 text-violet-700">
+                          <FolderOpen className="size-3" /> {first.category.name}
+                        </span>
+                      )}
+                      <Badge tone={PRIORITY_TONE[first.priority as keyof typeof PRIORITY_TONE]}>
+                        {first.priority}
+                      </Badge>
+                    </div>
                     {first.due_date && (
                       <div className="mt-0.5 ml-6 flex flex-wrap items-center gap-1.5 text-xs font-normal">
                         <span
@@ -565,17 +717,9 @@ export function TasksPage() {
                       </div>
                     )}
                   </Td>
-                  <Td className="text-slate-500">
-                    {first.creator?.full_name || first.creator?.email}
-                  </Td>
-                  <Td className="whitespace-nowrap text-slate-500">
-                    {formatDate(first.created_at)}
-                  </Td>
-                  <Td className="whitespace-nowrap text-slate-500">—</Td>
-                  <Td>
-                    <Badge tone={PRIORITY_TONE[first.priority as keyof typeof PRIORITY_TONE]}>
-                      {first.priority}
-                    </Badge>
+                  <Td className="whitespace-nowrap text-xs text-slate-500">
+                    Created {formatDate(first.created_at)}
+                    <div>by {first.creator?.full_name || first.creator?.email || '—'}</div>
                   </Td>
                   <Td className="whitespace-nowrap text-xs text-slate-500">
                     {done}/{total} completed
@@ -1772,5 +1916,98 @@ function CapacityCallout({ userId }: { userId: string }) {
     >
       {open} open · capacity {cap} — close some before planning
     </span>
+  )
+}
+
+/** Initials avatar + name, used for assignee / assigner cells. */
+function PersonChip({ name, muted }: { name: string; muted?: boolean }) {
+  const initials = name
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('')
+  return (
+    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+      <span
+        aria-hidden
+        className={cn(
+          'grid size-6 shrink-0 place-items-center rounded-full text-[10px] font-semibold',
+          muted ? 'bg-slate-100 text-slate-500' : 'bg-brand-100 text-brand-700',
+        )}
+      >
+        {initials || '—'}
+      </span>
+      <span className={muted ? 'text-slate-500' : 'text-slate-800'}>{name}</span>
+    </span>
+  )
+}
+
+function TaskSummaryCards({
+  summary,
+  quick,
+  onQuick,
+  onShowCompleted,
+  onShowOpen,
+}: {
+  summary: { open: number; overdue: number; dueToday: number; done: number }
+  quick: '' | 'overdue' | 'due_today'
+  onQuick: (q: '' | 'overdue' | 'due_today') => void
+  onShowCompleted: () => void
+  onShowOpen: () => void
+}) {
+  const cards = [
+    {
+      key: 'open',
+      label: 'Open tasks',
+      value: summary.open,
+      tone: 'border-brand-200 bg-brand-50 text-brand-800',
+      active: quick === '',
+      onClick: onShowOpen,
+    },
+    {
+      key: 'overdue',
+      label: 'Overdue',
+      value: summary.overdue,
+      tone: 'border-red-200 bg-red-50 text-red-800',
+      active: quick === 'overdue',
+      onClick: () => onQuick(quick === 'overdue' ? '' : 'overdue'),
+    },
+    {
+      key: 'due_today',
+      label: 'Due today',
+      value: summary.dueToday,
+      tone: 'border-amber-200 bg-amber-50 text-amber-800',
+      active: quick === 'due_today',
+      onClick: () => onQuick(quick === 'due_today' ? '' : 'due_today'),
+    },
+    {
+      key: 'done',
+      label: 'Completed',
+      value: summary.done,
+      tone: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+      active: false,
+      onClick: onShowCompleted,
+    },
+  ]
+  return (
+    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4" data-testid="task-summary">
+      {cards.map((c) => (
+        <button
+          key={c.key}
+          type="button"
+          data-testid={`task-summary-${c.key}`}
+          onClick={c.onClick}
+          className={cn(
+            'rounded-xl border px-4 py-3 text-left transition hover:shadow-sm',
+            c.tone,
+            c.active && c.key !== 'open' && 'ring-2 ring-offset-1 ring-current',
+          )}
+        >
+          <div className="text-2xl font-bold tabular-nums">{c.value}</div>
+          <div className="text-xs font-medium opacity-80">{c.label}</div>
+        </button>
+      ))}
+    </div>
   )
 }
